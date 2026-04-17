@@ -20,9 +20,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) {
+    const isAuthPath = ['/login', '/register', '/forgot-password'].includes(window.location.pathname);
+    
+    if (err.response?.status === 401 && !isAuthPath) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      // Use replace to prevent back-button loops
+      window.location.replace('/login');
     }
     return Promise.reject(err);
   }

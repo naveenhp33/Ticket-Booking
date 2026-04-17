@@ -21,9 +21,15 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      await login(form.email, form.password);
+      const res = await login(form.email, form.password);
       toast.success('Welcome back to TicketDesk');
-      navigate('/dashboard');
+      
+      const role = res.role; // Assuming login returns user data with role
+      if (['admin', 'support_agent'].includes(role)) {
+        navigate('/dashboard');
+      } else {
+        navigate('/tickets');
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Invalid credentials');
     } finally {

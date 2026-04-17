@@ -5,7 +5,7 @@
 
 // Knowledge-based keyword rules
 const KEYWORD_RULES = [
-  { keywords: ['server down', 'server crash', 'outage', 'production down', 'system failure'], bonus: 10, reason: 'Critical infrastructure keyword' },
+  { keywords: ['server down', 'server crash', 'outage', 'production down', 'system failure', 'os crashed', 'blue screen', 'bsod'], bonus: 10, reason: 'Critical infrastructure or system failure keyword' },
   { keywords: ['payment issue', 'payment failed', 'payroll', 'salary', 'financial loss'], bonus: 8, reason: 'Financial impact keyword' },
   { keywords: ['data breach', 'security', 'hack', 'unauthorized', 'data loss'], bonus: 10, reason: 'Security risk keyword' },
   { keywords: ['cannot login', 'locked out', 'access denied', 'vpn down', 'network down'], bonus: 7, reason: 'Access/connectivity keyword' },

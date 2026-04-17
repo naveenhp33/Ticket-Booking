@@ -29,7 +29,6 @@ import '../../styles/dashboard-premium.css';
 
 const NAV_ITEMS = {
   all: [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/tickets',   label: 'Tickets',    icon: TicketIcon },
     { path: '/tickets/new', label: 'New Ticket', icon: Plus },
     { path: '/knowledge', label: 'Knowledge Base', icon: BookOpen },
@@ -38,10 +37,12 @@ const NAV_ITEMS = {
     { path: '/profile',   label: 'Profile',    icon: User },
   ],
   support_agent: [
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/tickets?myTickets=true', label: 'My Queue', icon: TrendingUp },
     { path: '/profile',   label: 'Profile',    icon: User },
   ],
   admin: [
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/reports', label: 'Reports', icon: BarChart2 },
     { path: '/analytics', label: 'Analytics', icon: PieChart },

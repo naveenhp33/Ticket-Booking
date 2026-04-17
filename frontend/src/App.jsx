@@ -15,6 +15,7 @@ import KnowledgePage from './pages/KnowledgePage';
 import KnowledgeArticlePage from './pages/KnowledgeArticlePage';
 import ProfilePage from './pages/ProfilePage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import PlaceholderPage from './pages/PlaceholderPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 const ProtectedRoute = ({ children, roles }) => {
@@ -54,7 +55,12 @@ const AppRoutes = () => (
       <Route path="knowledge"          element={<KnowledgePage />} />
       <Route path="knowledge/:id"      element={<KnowledgeArticlePage />} />
       <Route path="profile"            element={<ProfilePage />} />
+      
+      {/* Admin Specific */}
       <Route path="admin/users"        element={<ProtectedRoute roles={['admin']}><AdminUsersPage /></ProtectedRoute>} />
+      <Route path="reports"            element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Reports" /></ProtectedRoute>} />
+      <Route path="analytics"          element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Analytics" /></ProtectedRoute>} />
+      <Route path="settings"           element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Settings" /></ProtectedRoute>} />
     </Route>
 
     <Route path="*" element={<NotFoundPage />} />

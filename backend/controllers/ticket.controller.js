@@ -140,10 +140,19 @@ const getTickets = async (req, res, next) => {
     if (req.user.role === 'employee') {
       query.createdBy = req.user._id;
     } else if (req.user.role === 'support_agent') {
-      if (myTickets === 'true') query.assignedTo = req.user._id;
-      // agents see all tickets
+      if (myTickets === 'true') {
+        query.assignedTo = req.user._id;
+      } else {
+        // Support agents see tickets in their department/expertise
+        query.category = { $in: [req.user.department, ...req.user.expertise] };
+      }
+    } else if (req.user.role === 'admin') {
+      // If the admin belongs to the "Admin" department, they see everything (Super Admin)
+      // Otherwise, they only see tickets for their specific department
+      if (req.user.department !== 'Admin') {
+        query.category = req.user.department;
+      }
     }
-    // Admins see all
 
     // Filters
     if (status) query.status = { $in: status.split(',') };

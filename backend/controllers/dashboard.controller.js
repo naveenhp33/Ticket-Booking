@@ -9,7 +9,7 @@ const getEmployeeDashboard = async (req, res, next) => {
   try {
     const userId = req.user._id;
 
-    const [statusCounts, priorityCounts, recentTickets, avgResolution] = await Promise.all([
+    const [statusCounts, priorityCounts, recentTickets, avgResolution, last7DaysTrend] = await Promise.all([
       Ticket.aggregate([
         { $match: { createdBy: userId } },
         { $group: { _id: '$status', count: { $sum: 1 } } }
@@ -33,6 +33,20 @@ const getEmployeeDashboard = async (req, res, next) => {
           }
         },
         { $group: { _id: null, avg: { $avg: '$resolutionTime' } } }
+      ]),
+      Ticket.aggregate([
+        {
+          $facet: {
+            created: [
+              { $match: { createdBy: userId, createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } },
+              { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } }
+            ],
+            resolved: [
+              { $match: { createdBy: userId, status: { $in: ['resolved', 'closed'] }, 'resolution.resolvedAt': { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } },
+              { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$resolution.resolvedAt' } }, count: { $sum: 1 } } }
+            ]
+          }
+        }
       ])
     ]);
 
@@ -51,11 +65,12 @@ const getEmployeeDashboard = async (req, res, next) => {
         open: statusMap.open || 0,
         assigned: statusMap.assigned || 0,
         in_progress: statusMap.in_progress || 0,
-        resolved: statusMap.resolved || 0,
+        resolved: (statusMap.resolved || 0) + (statusMap.closed || 0),
         closed: statusMap.closed || 0,
         reopened: statusMap.reopened || 0,
         priorityBreakdown: priorityMap,
-        avgResolutionHours: avgResolution[0]?.avg?.toFixed(1) || 0
+        avgResolutionHours: avgResolution[0]?.avg?.toFixed(1) || 0,
+        last7DaysTrend: last7DaysTrend[0]
       },
       recentTickets
     });
@@ -75,7 +90,7 @@ const getAdminDashboard = async (req, res, next) => {
     const [
       statusCounts, priorityCounts, slaBreached,
       topAgents, categoryBreakdown, criticalTickets,
-      last7DaysTrend, totalUsers
+      last7DaysTrend, slaAlerts, totalUsers
     ] = await Promise.all([
       Ticket.aggregate([
         { $match: matchBase },
@@ -108,46 +123,51 @@ const getAdminDashboard = async (req, res, next) => {
         .lean(),
       Ticket.aggregate([
         {
-          $match: {
-            ...matchBase,
-            createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+          $facet: {
+            created: [
+              { $match: { ...matchBase, createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } },
+              { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } }
+            ],
+            resolved: [
+              { $match: { ...matchBase, status: { $in: ['resolved', 'closed'] }, 'resolution.resolvedAt': { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } },
+              { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$resolution.resolvedAt' } }, count: { $sum: 1 } } }
+            ]
           }
-        },
-        {
-          $group: {
-            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            count: { $sum: 1 }
-          }
-        },
-        { $sort: { _id: 1 } }
+        }
       ]),
-      isAgent ? Promise.resolve(null) : User.countDocuments({ isActive: true })
-    ]);
-
-    const statusMap = {};
-    statusCounts.forEach(s => { statusMap[s._id] = s.count; });
-
-    const priorityMap = {};
-    priorityCounts.forEach(p => { priorityMap[p._id] = p.count; });
-
-    res.json({
-      success: true,
-      stats: {
-        total: Object.values(statusMap).reduce((a, b) => a + b, 0),
-        open: statusMap.open || 0,
-        assigned: statusMap.assigned || 0,
-        in_progress: statusMap.in_progress || 0,
-        resolved: statusMap.resolved || 0,
-        closed: statusMap.closed || 0,
-        slaBreached,
-        totalUsers,
-        priorityBreakdown: priorityMap,
-        categoryBreakdown,
-        topAgents,
-        criticalTickets,
-        last7DaysTrend
-      }
-    });
+        Ticket.find({ ...matchBase, status: { $nin: ['resolved', 'closed'] } })
+          .sort({ 'sla.deadline': 1 })
+          .limit(5)
+          .select('ticketId title sla status')
+          .lean(),
+        isAgent ? Promise.resolve(null) : User.countDocuments({ isActive: true })
+      ]);
+  
+      const statusMap = {};
+      statusCounts.forEach(s => { statusMap[s._id] = s.count; });
+  
+      const priorityMap = {};
+      priorityCounts.forEach(p => { priorityMap[p._id] = p.count; });
+  
+      res.json({
+        success: true,
+        stats: {
+          total: Object.values(statusMap).reduce((a, b) => a + b, 0),
+          open: statusMap.open || 0,
+          assigned: statusMap.assigned || 0,
+          in_progress: statusMap.in_progress || 0,
+          resolved: (statusMap.resolved || 0) + (statusMap.closed || 0),
+          closed: statusMap.closed || 0,
+          slaBreached,
+          totalUsers,
+          priorityBreakdown: priorityMap,
+          categoryBreakdown,
+          topAgents,
+          criticalTickets,
+          last7DaysTrend: last7DaysTrend[0],
+          slaAlerts
+        }
+      });
   } catch (err) {
     next(err);
   }

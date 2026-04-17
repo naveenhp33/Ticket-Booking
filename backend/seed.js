@@ -26,20 +26,50 @@ const seed = async () => {
       employeeId: 'TEST-001'
     });
 
-    // 2. ADMIN USER
-    const admin = await User.create({
+    // 2. SUPER ADMIN (System Access)
+    await User.create({
       name: 'System Admin', 
       email: 'admin@vdartinc.com', 
       password: 'password', 
       role: 'admin', 
-      department: 'IT', 
-      employeeId: 'ADM-001',
-      expertise: ['IT', 'Engineering', 'Admin']
+      department: 'Admin', 
+      employeeId: 'SYS-001'
     });
 
-    console.log('✅ Created easy test credentials: user@vdartinc.com / password');
+    // 3. IT DEPARTMENT ADMIN
+    const itAdmin = await User.create({
+      name: 'IT Admin',
+      email: 'itadmin@vdartinc.com',
+      password: 'password',
+      role: 'admin',
+      department: 'IT',
+      employeeId: 'ADM-IT-001'
+    });
 
-    // 3. SAMPLE TICKETS (Sequential to avoid ID collision)
+    // 4. IT SUPPORT TEAM (Reporting to IT Admin & System Admin)
+    const itSupportEmails = [
+      { name: 'Naveen Kumar', email: 'naveen@vdartinc.com' },
+      { name: 'Thara ', email: 'thara@vdartinc.com' },
+      { name: 'Krish', email: 'krish@vdartinc.com' }
+    ];
+
+    for (let i = 0; i < itSupportEmails.length; i++) {
+      await User.create({
+        name: itSupportEmails[i].name,
+        email: itSupportEmails[i].email,
+        password: 'password',
+        role: 'support_agent',
+        department: 'IT',
+        employeeId: `SUP-IT-00${i + 1}`,
+        expertise: ['IT']
+      });
+    }
+
+    console.log('✅ Created 1 Super Admin, 1 IT Admin & 3 Custom IT Support Agents.');
+
+    // 5. SAMPLE TICKETS
+    const sysAdmin = await User.findOne({ email: 'admin@vdartinc.com' });
+
     const ticketData = [
       {
         title: 'Initial System Access Request',
@@ -51,8 +81,8 @@ const seed = async () => {
       {
         title: 'Critical: Database Schema Update Needed',
         description: 'The production database requires an urgent update to include the new Engineering department enums.',
-        category: 'Engineering', priority: 'critical', status: 'in_progress',
-        createdBy: admin._id, assignedTo: admin._id,
+        category: 'IT', priority: 'critical', status: 'in_progress',
+        createdBy: itAdmin._id, assignedTo: sysAdmin._id,
         impactScope: 'company', urgencyLevel: 'right_now'
       }
     ];

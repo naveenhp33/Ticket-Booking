@@ -35,6 +35,14 @@ const getAgents = async (req, res, next) => {
     const { category } = req.query;
     const query = { role: { $in: ['support_agent', 'admin'] }, isActive: true };
     if (category) query.expertise = category;
+    
+    // If user is a department admin (not Super Admin), restrict agents to their department
+    if (req.user.role === 'admin' && req.user.department !== 'Admin') {
+      query.department = req.user.department;
+    } else if (req.user.role === 'support_agent') {
+      // Support agents also restricted to their own department/expertise for collaboration
+      query.department = req.user.department;
+    }
 
     const agents = await User.find(query)
       .select('name email department currentWorkload expertise avatar')

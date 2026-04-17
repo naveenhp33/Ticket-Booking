@@ -11,6 +11,7 @@ import {
   Activity
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { ticketService } from '../services/ticketService';
 import { 
   BarChart, Bar, 
@@ -29,42 +30,70 @@ const PRIORITY_COLORS = {
   low: 'var(--success)'
 };
 
-const CHART_DATA = [
-  { name: 'Mon', tickets: 12, resolved: 8 },
-  { name: 'Tue', tickets: 19, resolved: 15 },
-  { name: 'Wed', tickets: 15, resolved: 14 },
-  { name: 'Thu', tickets: 22, resolved: 20 },
-  { name: 'Fri', tickets: 28, resolved: 22 },
-  { name: 'Sat', tickets: 8, resolved: 10 },
-  { name: 'Sun', tickets: 5, resolved: 8 },
-];
-
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdminOrAgent = ['admin', 'support_agent'].includes(user?.role);
   const [stats, setStats] = useState(null);
   const [recentTickets, setRecentTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [chartData, setChartData] = useState([]);
 
   useEffect(() => {
-    Promise.all([
-      ticketService.getStats(),
-      ticketService.getAll({ limit: 6 })
-    ]).then(([statsRes, ticketsRes]) => {
-      const s = statsRes.data.stats;
-      setStats({
-        total: s.total || 0,
-        pending: (s.open || 0) + (s.assigned || 0) + (s.in_progress || 0),
-        resolved: s.resolved || 0,
-        avgResolutionTime: s.avgResolutionHours || 0,
-        priorityBreakdown: s.priorityBreakdown || {}
-      });
-      setRecentTickets(ticketsRes.data.tickets);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      setLoading(false);
-    });
-  }, []);
+    if (user && !isAdminOrAgent) {
+      navigate('/tickets');
+      return;
+    }
+    const fetchDashboardData = async () => {
+      try {
+        const statsPromise = isAdminOrAgent 
+          ? ticketService.getAdminStats() 
+          : ticketService.getStats();
+
+        const [statsRes, ticketsRes] = await Promise.all([
+          statsPromise,
+          ticketService.getAll({ limit: 6 })
+        ]);
+
+        const s = statsRes.data.stats;
+        
+        // Process Chart Data (Last 7 Days)
+        const trend = s.last7DaysTrend || { created: [], resolved: [] };
+        const generatedChartData = Array.from({ length: 7 }).map((_, i) => {
+          const d = new Date();
+          d.setDate(d.getDate() - (6 - i));
+          const dateStr = d.toISOString().split('T')[0];
+          const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+          
+          const createdItem = trend.created?.find(item => item._id === dateStr);
+          const resolvedItem = trend.resolved?.find(item => item._id === dateStr);
+          
+          return {
+            name: dayName,
+            tickets: createdItem?.count || 0,
+            resolved: resolvedItem?.count || 0
+          };
+        });
+        setChartData(generatedChartData);
+
+        setStats({
+          total: s.total || 0,
+          pending: (s.open || 0) + (s.assigned || 0) + (s.in_progress || 0),
+          resolved: s.resolved || 0,
+          avgResolutionTime: s.avgResolutionHours || 0,
+          priorityBreakdown: s.priorityBreakdown || {},
+          slaAlerts: s.slaAlerts || []
+        });
+        setRecentTickets(ticketsRes.data.tickets);
+        setLoading(false);
+      } catch (err) {
+        console.error(err);
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [isAdminOrAgent]);
 
   const priorityData = stats?.priorityBreakdown ? Object.entries(stats.priorityBreakdown).map(([k, v]) => ({ name: k, value: v })) : [
     { name: 'Critical', value: 2 },
@@ -172,7 +201,7 @@ export default function DashboardPage() {
               </div>
               <div style={{ height: '260px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={CHART_DATA}>
+                  <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted)' }} dy={10} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted)' }} dx={-10} />
@@ -189,7 +218,7 @@ export default function DashboardPage() {
               </div>
               <div style={{ height: '260px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={CHART_DATA}>
+                  <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted)' }} dy={10} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted)' }} dx={-10} />
@@ -305,20 +334,32 @@ export default function DashboardPage() {
             <div className="premium-card-header">
               <h3 className="premium-card-title">SLA Alerts</h3>
             </div>
-            <div className="premium-activity-item">
-              <div className="activity-icon" style={{ background: '#fef2f2', color: 'var(--danger)' }}><AlertCircle size={16} /></div>
-              <div className="activity-content">
-                <p><b>#TKT-00104</b> is nearing SLA breach</p>
-                <span>10 minutes ago</span>
+            {stats?.slaAlerts?.length > 0 ? stats.slaAlerts.map(alert => (
+              <div 
+                key={alert._id} 
+                className="premium-activity-item" 
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/tickets/${alert._id}`)}
+              >
+                <div 
+                  className="activity-icon" 
+                  style={{ 
+                    background: alert.sla?.breached ? '#fef2f2' : '#fffbeb', 
+                    color: alert.sla?.breached ? 'var(--danger)' : 'var(--warning)' 
+                  }}
+                >
+                  {alert.sla?.breached ? <AlertCircle size={16} /> : <Clock size={16} />}
+                </div>
+                <div className="activity-content">
+                  <p><b>#{alert.ticketId}</b> {alert.sla?.breached ? 'SLA Breached' : 'Nearing Deadline'}</p>
+                  <span style={{ display: 'block', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {alert.title}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="premium-activity-item">
-              <div className="activity-icon" style={{ background: '#fffbeb', color: 'var(--warning)' }}><Clock size={16} /></div>
-              <div className="activity-content">
-                <p><b>#TKT-00102</b> unassigned for 2 hrs</p>
-                <span>2 hours ago</span>
-              </div>
-            </div>
+            )) : (
+              <p style={{ fontSize: '0.875rem', color: 'var(--muted)', textAlign: 'center', padding: '20px' }}>No pending SLA alerts.</p>
+            )}
           </div>
 
           <div className="premium-card" style={{ marginBottom: 0 }}>

@@ -4,6 +4,7 @@ export const ticketService = {
   getAll: (params) => api.get('/tickets', { params }),
   getOne: (id) => api.get(`/tickets/${id}`),
   getStats: () => api.get('/dashboard/employee'),
+  getAdminStats: () => api.get('/dashboard/admin'),
   create: (formData) => api.post('/tickets', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   updateStatus: (id, data) => api.patch(`/tickets/${id}/status`, data),
   assign: (id, agentId) => api.patch(`/tickets/${id}/assign`, { agentId }),

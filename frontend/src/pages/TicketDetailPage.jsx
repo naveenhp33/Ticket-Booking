@@ -29,6 +29,7 @@ export default function TicketDetailPage() {
   const { on } = useSocket();
   const toast = useToast();
   const navigate = useNavigate();
+  const isAdminOrAgent = ['admin', 'support_agent'].includes(user?.role);
 
   const [ticket, setTicket] = useState(null);
   const [comments, setComments] = useState([]);
@@ -36,11 +37,54 @@ export default function TicketDetailPage() {
   const [activeTab, setActiveTab] = useState('comments');
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [agents, setAgents] = useState([]);
 
   useEffect(() => {
     fetchTicket();
     fetchComments();
-  }, [id]);
+    if (isAdminOrAgent) {
+      fetchAgents();
+    }
+  }, [id, user]);
+
+  const fetchAgents = async () => {
+    try {
+      const res = await userService.getAgents();
+      setAgents(res.data.agents);
+    } catch (err) {
+      console.error('Error fetching agents:', err);
+    }
+  };
+
+  const handleAssign = async (agentId) => {
+    try {
+      await ticketService.updateStatus(id, { assignedTo: agentId });
+      toast.success('Ticket reassigned successfully!');
+      fetchTicket();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reassign');
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!rating) return;
+    setSubmittingFeedback(true);
+    try {
+      await ticketService.submitFeedback(id, { 
+        rating, 
+        comment: feedbackText 
+      });
+      toast.success('Thank you for your feedback!');
+      fetchTicket();
+    } catch (err) {
+      toast.error('Failed to submit feedback');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
 
   const fetchTicket = async () => {
     try {
@@ -78,21 +122,28 @@ export default function TicketDetailPage() {
     }
   };
 
+  const [isResolving, setIsResolving] = useState(false);
+
   const handleResolve = async () => {
-    if (!window.confirm('Mark this ticket as resolved?')) return;
+    setIsResolving(true);
     try {
-      await ticketService.updateStatus(id, { status: 'resolved' });
+      await ticketService.updateStatus(id, { 
+        status: 'resolved',
+        resolution: { notes: 'Issue has been addressed and resolved.' }
+      });
       toast.success('Ticket resolved successfully!');
       fetchTicket();
     } catch (err) {
       toast.error('Failed to resolve ticket');
+    } finally {
+      setIsResolving(false);
     }
   };
 
   if (loading) return <div>Loading...</div>;
   if (!ticket) return null;
 
-  const isAdminOrAgent = ['admin', 'support_agent'].includes(user?.role);
+
 
   return (
     <motion.div 
@@ -100,7 +151,6 @@ export default function TicketDetailPage() {
       animate={{ opacity: 1 }}
       className="page-layout"
     >
-      {/* Header */}
       <div className="flex-between mb-8" style={{ marginBottom: 'var(--s-8)' }}>
         <div className="flex-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate('/tickets')}><ArrowLeft size={20} /></Button>
@@ -114,7 +164,16 @@ export default function TicketDetailPage() {
         </div>
         <div className="flex-center gap-3">
           <Button variant="outline" leftIcon={<History size={18} />}>History</Button>
-          {isAdminOrAgent && <Button leftIcon={<CheckCircle2 size={18} />} onClick={handleResolve} disabled={ticket.status === 'resolved'}>Resolve Ticket</Button>}
+          {isAdminOrAgent && (
+            <Button 
+              leftIcon={<CheckCircle2 size={18} />} 
+              onClick={handleResolve} 
+              disabled={ticket.status === 'resolved'}
+              isLoading={isResolving}
+            >
+              Resolve Ticket
+            </Button>
+          )}
         </div>
       </div>
 
@@ -206,7 +265,18 @@ export default function TicketDetailPage() {
               </div>
               <div className="flex-between">
                 <span style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Assignee</span>
-                {ticket.assignedTo ? (
+                {isAdminOrAgent ? (
+                  <select 
+                    style={{ border: 'none', background: 'var(--bg)', fontSize: '0.875rem', fontWeight: 600, padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', maxWidth: '150px' }}
+                    value={ticket.assignedTo?._id || ''}
+                    onChange={(e) => handleAssign(e.target.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {agents.map(a => (
+                      <option key={a._id} value={a._id}>{a.name}</option>
+                    ))}
+                  </select>
+                ) : ticket.assignedTo ? (
                    <div className="flex-center gap-2">
                       <div className="flex-center" style={{ width: '20px', height: '20px', background: getAvatarColor(ticket.assignedTo.name), borderRadius: '4px', color: 'white', fontSize: '0.5rem' }}>{getInitials(ticket.assignedTo.name)}</div>
                       <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{ticket.assignedTo.name}</span>
@@ -218,21 +288,36 @@ export default function TicketDetailPage() {
 
           <Card title="Timeline">
              <div className="flex-col gap-4">
+                {/* Creation Event */}
                 <div className="flex gap-3">
-                   <div className="flex-col flex-center"><div className="priority-dot priority-low" /><div style={{ flex: 1, width: '1px', background: 'var(--border)' }} /></div>
+                   <div className="flex-col flex-center">
+                     <div className="priority-dot" style={{ background: 'var(--primary)' }} />
+                     {ticket.statusHistory?.length > 0 && <div style={{ flex: 1, width: '2px', background: 'var(--border-light)' }} />}
+                   </div>
                    <div>
                       <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>Ticket Created</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{formatDateTime(ticket.createdAt)}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{timeAgo(ticket.createdAt)}</div>
                    </div>
                 </div>
-                {/* Simulated events */}
-                <div className="flex gap-3">
-                   <div className="flex-col flex-center"><div className="priority-dot priority-medium" /></div>
-                   <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>System Assigned to IT</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{formatDateTime(ticket.createdAt)}</div>
-                   </div>
-                </div>
+
+                {/* History Events */}
+                {ticket.statusHistory?.map((history, idx) => (
+                  <div key={history._id || idx} className="flex gap-3">
+                    <div className="flex-col flex-center">
+                      <div className="priority-dot" style={{ background: history.to === 'resolved' ? 'var(--success)' : 'var(--warning)' }} />
+                      {idx < ticket.statusHistory.length - 1 && <div style={{ flex: 1, width: '2px', background: 'var(--border-light)' }} />}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'capitalize' }}>
+                        Status: {history.to.replace('_', ' ')}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                        {history.changedBy?.name || 'System'} • {timeAgo(history.timestamp)}
+                      </div>
+                      {history.reason && <div style={{ fontSize: '0.7rem', marginTop: '2px', color: 'var(--text-muted)', fontStyle: 'italic' }}>"{history.reason}"</div>}
+                    </div>
+                  </div>
+                ))}
              </div>
           </Card>
 
@@ -247,7 +332,46 @@ export default function TicketDetailPage() {
                   <p style={{ fontSize: '0.875rem', fontStyle: 'italic' }}>"{ticket.feedback.comment}"</p>
                </div>
              ) : (
-               <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Waiting for resolution feedback.</p>
+               ticket.status === 'resolved' && (user?._id === ticket.createdBy?._id) ? (
+                 <div className="flex-col gap-3">
+                   <div className="flex gap-2">
+                     {[1, 2, 3, 4, 5].map((star) => (
+                       <button
+                         key={star}
+                         onClick={() => setRating(star)}
+                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                       >
+                         <Star 
+                           size={24} 
+                           fill={star <= rating ? 'var(--warning)' : 'none'} 
+                           color="var(--warning)" 
+                         />
+                       </button>
+                     ))}
+                   </div>
+                   <textarea
+                     className="input"
+                     placeholder="Tell us about your experience..."
+                     value={feedbackText}
+                     onChange={(e) => setFeedbackText(e.target.value)}
+                     style={{ minHeight: '60px', padding: '8px', fontSize: '0.8rem' }}
+                   />
+                   <Button 
+                     size="sm" 
+                     onClick={handleSubmitFeedback}
+                     disabled={!rating}
+                     isLoading={submittingFeedback}
+                   >
+                     Submit & Close Ticket
+                   </Button>
+                 </div>
+               ) : (
+                 <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>
+                   {ticket.status === 'resolved' 
+                     ? "Creator can now provide feedback." 
+                     : "Waiting for resolution feedback."}
+                 </p>
+               )
              )}
           </Card>
         </div>

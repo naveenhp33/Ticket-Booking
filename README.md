@@ -76,3 +76,26 @@
 - Real-time chat
 - File attachments
 - Dashboard analytics
+
+---
+
+## Default Credentials (for testing)
+
+**Common Password:** `password`
+
+| Entity | Role | Email |
+| :--- | :--- | :--- |
+| **System Admin** | Admin (Central) | `admin@vdartinc.com` |
+| **IT Admin** | Admin (IT only) | `itadmin@vdartinc.com` |
+| **Test User** | Employee | `user@vdartinc.com` |
+| **Support Agent 1** | Naveen Kumar | `naveen@vdartinc.com` |
+| **Support Agent 2** | Thara | `thara@vdartinc.com` |
+| **Support Agent 3** | Krish | `krish@vdartinc.com` |
+
+
+> [!NOTE]
+> **IT Admin Access:** The IT Admin (`itadmin@vdartinc.com`) has restricted access to only view and manage tickets in the **IT Department**. They are responsible for assigning these tickets to the IT Support Team.
+
+
+
+
