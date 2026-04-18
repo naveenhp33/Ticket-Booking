@@ -30,10 +30,10 @@ import '../../styles/dashboard-premium.css';
 const NAV_ITEMS = {
   all: [
     { path: '/tickets',   label: 'Tickets',    icon: TicketIcon },
-    { path: '/tickets/new', label: 'New Ticket', icon: Plus },
     { path: '/knowledge', label: 'Knowledge Base', icon: BookOpen },
   ],
   employee: [
+    { path: '/tickets/new', label: 'New Ticket', icon: Plus },
     { path: '/profile',   label: 'Profile',    icon: User },
   ],
   support_agent: [
@@ -166,10 +166,12 @@ export default function AppLayout() {
           </div>
 
           <div className="premium-header-actions">
-            <button className="premium-btn" onClick={() => navigate('/tickets/new')}>
-              <Plus size={18} />
-              <span className="hide-mobile">Create Ticket</span>
-            </button>
+            {user?.role === 'employee' && (
+              <button className="premium-btn" onClick={() => navigate('/tickets/new')}>
+                <Plus size={18} />
+                <span className="hide-mobile">Create Ticket</span>
+              </button>
+            )}
 
             <div style={{ position: 'relative' }} ref={notifRef}>
               <button 

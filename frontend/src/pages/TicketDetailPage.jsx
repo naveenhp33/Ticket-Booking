@@ -13,7 +13,8 @@ import {
   MoreVertical,
   Send,
   Lock,
-  Star
+  Star,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -26,7 +27,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function TicketDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
-  const { on } = useSocket();
+  const { on, joinTicket, leaveTicket } = useSocket();
   const toast = useToast();
   const navigate = useNavigate();
   const isAdminOrAgent = ['admin', 'support_agent'].includes(user?.role);
@@ -41,6 +42,14 @@ export default function TicketDetailPage() {
   const [feedbackText, setFeedbackText] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [agents, setAgents] = useState([]);
+  const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [reassignReason, setReassignReason] = useState('');
+  const [submittingReassign, setSubmittingReassign] = useState(false);
+  const [isInternal, setIsInternal] = useState(false);
+
+  const isAdmin = user?.role === 'admin';
+  const isAgent = user?.role === 'support_agent';
+  const isAssignedAgent = isAgent && ticket?.assignedTo?._id === user?._id;
 
   useEffect(() => {
     fetchTicket();
@@ -48,7 +57,84 @@ export default function TicketDetailPage() {
     if (isAdminOrAgent) {
       fetchAgents();
     }
+    // Join the ticket's socket room for real-time updates
+    if (id) joinTicket(id);
+    return () => {
+      if (id) leaveTicket(id);
+    };
   }, [id, user]);
+
+  // Real-time socket listeners for this ticket
+  useEffect(() => {
+    if (!on || !id) return;
+
+    const offStatus = on('status_updated', (data) => {
+      if (data.ticketId === id || data.ticketId === ticket?._id) {
+        setTicket(prev => prev ? {
+          ...prev,
+          status: data.status,
+          statusHistory: [...(prev.statusHistory || []), {
+            from: prev.status,
+            to: data.status,
+            changedBy: data.changedBy,
+            timestamp: data.timestamp
+          }]
+        } : prev);
+      }
+    });
+
+    const offAssigned = on('ticket_assigned', (data) => {
+      if (data.ticketId === id || data.ticketId === ticket?._id) {
+        setTicket(prev => prev ? {
+          ...prev,
+          assignedTo: data.assignedTo,
+          status: prev.status === 'open' ? 'assigned' : prev.status
+        } : prev);
+      }
+    });
+
+    const offComment = on('new_comment', (data) => {
+      if (data.ticketId === id || data.ticketId === ticket?._id) {
+        setComments(prev => {
+          // Avoid duplicates
+          if (prev.some(c => c._id === data.comment._id)) return prev;
+          return [...prev, data.comment];
+        });
+      }
+    });
+
+    const offPriority = on('priority_updated', (data) => {
+      if (data.ticketId === id || data.ticketId === ticket?._id) {
+        setTicket(prev => prev ? {
+          ...prev,
+          priority: data.priority
+        } : prev);
+      }
+    });
+
+    const offReopened = on('ticket_reopened', (data) => {
+      if (data.ticketId === id || data.ticketId === ticket?._id) {
+        setTicket(prev => prev ? {
+          ...prev,
+          status: 'reopened',
+          statusHistory: [...(prev.statusHistory || []), {
+            from: prev.status,
+            to: 'reopened',
+            reason: data.reason,
+            timestamp: new Date().toISOString()
+          }]
+        } : prev);
+      }
+    });
+
+    return () => {
+      offStatus && offStatus();
+      offAssigned && offAssigned();
+      offComment && offComment();
+      offPriority && offPriority();
+      offReopened && offReopened();
+    };
+  }, [on, id, ticket?._id]);
 
   const fetchAgents = async () => {
     try {
@@ -61,7 +147,7 @@ export default function TicketDetailPage() {
 
   const handleAssign = async (agentId) => {
     try {
-      await ticketService.updateStatus(id, { assignedTo: agentId });
+      await ticketService.assign(id, agentId);
       toast.success('Ticket reassigned successfully!');
       fetchTicket();
     } catch (err) {
@@ -112,8 +198,10 @@ export default function TicketDetailPage() {
     try {
       const fd = new FormData();
       fd.append('content', commentText);
+      fd.append('isInternal', isInternal);
       await commentService.add(id, fd);
       setCommentText('');
+      setIsInternal(false);
       fetchComments();
     } catch (err) {
       toast.error('Failed to post comment');
@@ -137,6 +225,23 @@ export default function TicketDetailPage() {
       toast.error('Failed to resolve ticket');
     } finally {
       setIsResolving(false);
+    }
+  };
+
+  const handleReassignRequest = async () => {
+    if (reassignReason.length < 10) {
+      return toast.error('Please provide a reason (min 10 characters)');
+    }
+    setSubmittingReassign(true);
+    try {
+      await ticketService.createReassignRequest(id, { reason: reassignReason });
+      toast.success('Reassignment request sent to admin');
+      setIsReassignModalOpen(false);
+      setReassignReason('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send request');
+    } finally {
+      setSubmittingReassign(false);
     }
   };
 
@@ -164,7 +269,16 @@ export default function TicketDetailPage() {
         </div>
         <div className="flex-center gap-3">
           <Button variant="outline" leftIcon={<History size={18} />}>History</Button>
-          {isAdminOrAgent && (
+          {isAssignedAgent && ticket.status !== 'resolved' && (
+            <Button 
+                variant="outline" 
+                leftIcon={<RefreshCw size={18} />}
+                onClick={() => setIsReassignModalOpen(true)}
+            >
+                Request Reassignment
+            </Button>
+          )}
+          {(isAdmin || (isAgent && isAssignedAgent)) && (
             <Button 
               leftIcon={<CheckCircle2 size={18} />} 
               onClick={handleResolve} 
@@ -198,6 +312,21 @@ export default function TicketDetailPage() {
             </div>
           </Card>
 
+          {/* Resolution Insight */}
+          {(ticket.status === 'resolved' || ticket.status === 'closed') && ticket.resolution && (
+            <Card style={{ background: 'var(--success-light)', border: '1px solid var(--success)', padding: 'var(--s-6)' }}>
+               <div className="flex-center gap-2 mb-3" style={{ color: 'var(--success-dark)', fontWeight: 800 }}>
+                  <CheckCircle2 size={20} /> Resolution Details
+               </div>
+               <div style={{ fontSize: '0.95rem', color: 'var(--text-dark)', lineHeight: 1.6 }}>
+                  {ticket.resolution.notes || "This issue has been successfully resolved."}
+               </div>
+               <div style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                  Resolved on {formatDateTime(ticket.resolution.resolvedAt || ticket.updatedAt)}
+               </div>
+            </Card>
+          )}
+
           {/* Discussion */}
           <div className="flex-col gap-4">
              <div className="flex-center gap-2" style={{ fontWeight: 700, paddingLeft: 'var(--s-2)' }}>
@@ -223,24 +352,43 @@ export default function TicketDetailPage() {
              </div>
 
              {/* Comment Input */}
-             <Card style={{ padding: 'var(--s-4)' }}>
-               <form onSubmit={handlePostComment}>
-                 <textarea 
-                   className="input"
-                   style={{ height: '80px', paddingTop: '12px', marginBottom: 'var(--s-4)', border: 'none', background: 'var(--bg)', borderRadius: 'var(--r-md)' }}
-                   placeholder="Write your message here..."
-                   value={commentText}
-                   onChange={e => setCommentText(e.target.value)}
-                 />
-                 <div className="flex-between">
-                   <div className="flex-center gap-2">
-                     <Button variant="ghost" size="sm" leftIcon={<Paperclip size={16} />}>Attach File</Button>
-                     {isAdminOrAgent && <Button variant="ghost" size="sm" leftIcon={<Lock size={16} />}>Internal Note</Button>}
-                   </div>
-                   <Button size="sm" type="submit" isLoading={submittingComment} rightIcon={<Send size={14} />}>Reply</Button>
-                 </div>
-               </form>
-             </Card>
+              <Card style={{ padding: 'var(--s-4)', border: isInternal ? '2px solid var(--warning)' : '1px solid var(--border)' }}>
+                <form onSubmit={handlePostComment}>
+                  {isInternal && <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--warning)', textTransform: 'uppercase', marginBottom: '8px' }}>Posting as Internal Note (Hidden from Customer)</div>}
+                  <textarea 
+                    className="input"
+                    style={{ height: '80px', paddingTop: '12px', marginBottom: 'var(--s-4)', border: 'none', background: 'var(--bg)', borderRadius: 'var(--r-md)' }}
+                    placeholder={isInternal ? "Write private agent note..." : "Write your message here..."}
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                  />
+                  <div className="flex-between">
+                    <div className="flex-center gap-2">
+                      <Button variant="ghost" size="sm" leftIcon={<Paperclip size={16} />}>Attach File</Button>
+                      {isAdminOrAgent && (
+                        <Button 
+                          variant={isInternal ? "warning" : "ghost"} 
+                          size="sm" 
+                          leftIcon={<Lock size={16} />}
+                          onClick={() => setIsInternal(!isInternal)}
+                          type="button"
+                        >
+                          {isInternal ? "Private Note On" : "Internal Note"}
+                        </Button>
+                      )}
+                    </div>
+                    <Button 
+                      size="sm" 
+                      type="submit" 
+                      variant={isInternal ? "warning" : "primary"}
+                      isLoading={submittingComment} 
+                      rightIcon={<Send size={14} />}
+                    >
+                      {isInternal ? "Post Private Note" : "Reply"}
+                    </Button>
+                  </div>
+                </form>
+              </Card>
           </div>
         </div>
 
@@ -265,7 +413,7 @@ export default function TicketDetailPage() {
               </div>
               <div className="flex-between">
                 <span style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Assignee</span>
-                {isAdminOrAgent ? (
+                {isAdmin ? (
                   <select 
                     style={{ border: 'none', background: 'var(--bg)', fontSize: '0.875rem', fontWeight: 600, padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', maxWidth: '150px' }}
                     value={ticket.assignedTo?._id || ''}
@@ -309,7 +457,7 @@ export default function TicketDetailPage() {
                     </div>
                     <div>
                       <div style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'capitalize' }}>
-                        Status: {history.to.replace('_', ' ')}
+                        Status: {history.to?.replace('_', ' ')}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
                         {history.changedBy?.name || 'System'} • {timeAgo(history.timestamp)}
@@ -376,6 +524,41 @@ export default function TicketDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Reassignment Modal */}
+      {isReassignModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsReassignModalOpen(false)}>
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="modal" 
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '450px' }}
+          >
+            <div className="modal-header">
+              <h3 className="card-title">Request Reassignment</h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Tell your admin why this ticket should be moved to another agent.</p>
+            </div>
+            <div className="modal-body">
+              <div className="input-group">
+                <label className="input-label">Reason for Request (Mandatory)</label>
+                <textarea 
+                  className="input"
+                  style={{ height: '120px', paddingTop: '12px' }}
+                  placeholder="e.g., This issue requires specialized knowledge in Finance systems which I don't have access to."
+                  value={reassignReason}
+                  onChange={e => setReassignReason(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <Button variant="ghost" onClick={() => setIsReassignModalOpen(false)}>Cancel</Button>
+              <Button isLoading={submittingReassign} onClick={handleReassignRequest}>Send Request</Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   );
 }

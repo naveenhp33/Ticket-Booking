@@ -107,12 +107,12 @@ export default function ProfilePage() {
               </p>
               <div className="flex-center gap-6">
                  <div className="flex-center gap-2">
-                    <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>24</span>
+                    <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{user?.stats?.totalRaised || 0}</span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Tickets Raised</span>
                  </div>
                  <div className="flex-center gap-2">
-                    <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>4.8</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Avg Rating</span>
+                    <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{user?.stats?.totalResolved || 0}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Resolved</span>
                  </div>
               </div>
            </div>

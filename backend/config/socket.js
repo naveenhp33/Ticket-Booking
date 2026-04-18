@@ -21,6 +21,7 @@ const initSocket = (server) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       socket.userId = decoded.id;
       socket.userRole = decoded.role;
+      socket.userDept = decoded.department;
       next();
     } catch {
       next(new Error('Authentication error: Invalid token'));
@@ -28,13 +29,18 @@ const initSocket = (server) => {
   });
 
   io.on('connection', (socket) => {
-    console.log(`🔌 Socket connected: ${socket.userId}`);
+    console.log(`🔌 Socket connected: ${socket.userId} (${socket.userRole} in ${socket.userDept})`);
 
     // Join personal room
     socket.join(`user_${socket.userId}`);
 
     // Join role room for broadcasts
     socket.join(`role_${socket.userRole}`);
+
+    // Join department room
+    if (socket.userDept) {
+      socket.join(`dept_${socket.userDept}`);
+    }
 
     // Join ticket room for real-time updates
     socket.on('join_ticket', (ticketId) => {
@@ -67,6 +73,10 @@ const emitToRole = (role, event, data) => {
   if (io) io.to(`role_${role}`).emit(event, data);
 };
 
+const emitToDepartment = (department, event, data) => {
+  if (io) io.to(`dept_${department}`).emit(event, data);
+};
+
 const emitToTicket = (ticketId, event, data) => {
   if (io) io.to(`ticket_${ticketId}`).emit(event, data);
 };
@@ -75,4 +85,12 @@ const emitToAll = (event, data) => {
   if (io) io.emit(event, data);
 };
 
-module.exports = { initSocket, getIO, emitToUser, emitToRole, emitToTicket, emitToAll };
+module.exports = { 
+  initSocket, 
+  getIO, 
+  emitToUser, 
+  emitToRole, 
+  emitToDepartment,
+  emitToTicket, 
+  emitToAll 
+};

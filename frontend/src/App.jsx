@@ -50,7 +50,7 @@ const AppRoutes = () => (
     <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
       <Route path="dashboard"          element={<DashboardPage />} />
       <Route path="tickets"            element={<TicketsPage />} />
-      <Route path="tickets/new"        element={<CreateTicketPage />} />
+      <Route path="tickets/new"        element={<ProtectedRoute roles={['employee']}><CreateTicketPage /></ProtectedRoute>} />
       <Route path="tickets/:id"        element={<TicketDetailPage />} />
       <Route path="knowledge"          element={<KnowledgePage />} />
       <Route path="knowledge/:id"      element={<KnowledgeArticlePage />} />

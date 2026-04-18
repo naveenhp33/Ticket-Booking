@@ -29,9 +29,10 @@ const userSchema = new mongoose.Schema({
   },
   department: {
     type: String,
-    enum: ['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 'Sales', 'Legal', 'Engineering'],
-    required: [true, 'Department is required']
+    enum: ['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 'Sales', 'Legal', 'Engineering', 'Other'],
+    default: 'Other'
   },
+  isGuest: { type: Boolean, default: false },
   designation: { type: String, trim: true },
   employeeId: { type: String, unique: true, sparse: true },
   phone: { type: String, trim: true },
@@ -89,5 +90,17 @@ userSchema.virtual('fullLocation').get(function () {
 
 userSchema.index({ email: 1 });
 userSchema.index({ role: 1, department: 1 });
+
+// Relocated from fix-agents.js: Ensure baseline expertise for IT admins and normalized workload
+userSchema.pre('save', function(next) {
+  // Normalize workload
+  if (this.currentWorkload < 0) this.currentWorkload = 0;
+
+  // Ensure IT admins have matching expertise by default
+  if (this.role === 'admin' && this.department === 'IT' && (!this.expertise || this.expertise.length === 0)) {
+    this.expertise = ['IT'];
+  }
+  next();
+});
 
 module.exports = mongoose.model('User', userSchema);

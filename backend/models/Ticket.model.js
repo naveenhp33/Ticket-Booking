@@ -208,8 +208,30 @@ const ticketSchema = new mongoose.Schema({
 // Auto-generate ticket ID
 ticketSchema.pre('save', async function (next) {
   if (!this.ticketId) {
-    const count = await mongoose.model('Ticket').countDocuments();
-    this.ticketId = `TKT-${String(count + 1).padStart(5, '0')}`;
+    try {
+      // Find the ticket with the highest ticketId
+      const lastTicket = await mongoose.model('Ticket')
+        .findOne({ ticketId: /^TKT-/ })
+        .sort({ ticketId: -1 })
+        .collation({ locale: 'en', numericOrdering: true });
+        
+      let nextIdNumber = 1;
+      if (lastTicket && lastTicket.ticketId) {
+        const match = lastTicket.ticketId.match(/TKT-(\d+)/);
+        if (match) {
+          nextIdNumber = parseInt(match[1], 10) + 1;
+        } else {
+          const count = await mongoose.model('Ticket').countDocuments();
+          nextIdNumber = count + 1;
+        }
+      } else {
+         const count = await mongoose.model('Ticket').countDocuments();
+         nextIdNumber = count + 1;
+      }
+      this.ticketId = `TKT-${String(nextIdNumber).padStart(5, '0')}`;
+    } catch (err) {
+      return next(err);
+    }
   }
   next();
 });

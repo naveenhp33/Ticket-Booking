@@ -8,27 +8,64 @@ let transporter = null;
 const getTransporter = async () => {
   if (transporter) return transporter;
 
-  const oauth2Client = new OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    process.env.GMAIL_REDIRECT_URI
-  );
+  const method = process.env.EMAIL_POLLING_METHOD || 'GMAIL';
+  const hasGmailToken = process.env.GMAIL_REFRESH_TOKEN && !process.env.GMAIL_REFRESH_TOKEN.includes('your_gmail');
 
-  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+  if (method === 'GMAIL' && hasGmailToken) {
+    // Gmail OAuth2
+    const oauth2Client = new OAuth2(
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
+      process.env.GMAIL_REDIRECT_URI
+    );
 
-  const { token: accessToken } = await oauth2Client.getAccessToken();
+    oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
 
-  transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      type: 'OAuth2',
-      user: process.env.SUPPORT_EMAIL,
-      clientId: process.env.GMAIL_CLIENT_ID,
-      clientSecret: process.env.GMAIL_CLIENT_SECRET,
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-      accessToken
+    try {
+      const { token: accessToken } = await oauth2Client.getAccessToken();
+
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          type: 'OAuth2',
+          user: process.env.SUPPORT_EMAIL,
+          clientId: process.env.GMAIL_CLIENT_ID,
+          clientSecret: process.env.GMAIL_CLIENT_SECRET,
+          refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+          accessToken
+        }
+      });
+    } catch (err) {
+      console.error('❌ Failed to create Gmail transporter:', err.message);
+      return null;
     }
-  });
+  } else if (process.env.SMTP_HOST) {
+    // Standard SMTP
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER || process.env.IMAP_USER,
+        pass: process.env.SMTP_PASSWORD || process.env.IMAP_PASSWORD
+      }
+    });
+  } else if (process.env.IMAP_HOST && process.env.IMAP_USER && process.env.IMAP_PASSWORD) {
+    // Try to guess SMTP from IMAP settings if SMTP not explicitly provided
+    // Many providers use smtp.example.com if imap.example.com is used
+    const smtpHost = process.env.IMAP_HOST.replace('imap', 'smtp');
+    console.log(`📡 SMTP host not provided, trying guessed host: ${smtpHost}`);
+    
+    transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: 587,
+      secure: false, // StartTLS
+      auth: {
+        user: process.env.IMAP_USER,
+        pass: process.env.IMAP_PASSWORD
+      }
+    });
+  }
 
   return transporter;
 };
@@ -36,6 +73,8 @@ const getTransporter = async () => {
 const sendTicketConfirmation = async ({ to, name, ticket }) => {
   try {
     const transport = await getTransporter();
+    if (!transport) return;
+
     await transport.sendMail({
       from: `"IT Support" <${process.env.SUPPORT_EMAIL}>`,
       to,
@@ -61,14 +100,17 @@ const sendTicketConfirmation = async ({ to, name, ticket }) => {
         </div>
       `
     });
+    console.log(`📧 Confirmation email sent to ${to}`);
   } catch (err) {
-    console.error('Email send error:', err.message);
+    console.error('❌ Email send error:', err.message);
   }
 };
 
 const sendStatusUpdate = async ({ to, name, ticket, newStatus }) => {
   try {
     const transport = await getTransporter();
+    if (!transport) return;
+
     const statusColors = {
       in_progress: '#0d6efd',
       resolved: '#198754',
@@ -94,8 +136,9 @@ const sendStatusUpdate = async ({ to, name, ticket, newStatus }) => {
         </div>
       `
     });
+    console.log(`📧 Status update email sent to ${to}`);
   } catch (err) {
-    console.error('Status email error:', err.message);
+    console.error('❌ Status email error:', err.message);
   }
 };
 

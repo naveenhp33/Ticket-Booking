@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSocket } from '../context/SocketContext';
 import { 
   Users, 
   Search, 
@@ -26,6 +27,7 @@ const DEPARTMENTS = ['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 
 
 export default function AdminUsersPage() {
   const toast = useToast();
+  const { on } = useSocket();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -40,6 +42,20 @@ export default function AdminUsersPage() {
   useEffect(() => {
     fetchUsers();
   }, [search, roleFilter]);
+
+  useEffect(() => {
+    if (!on) return;
+
+    const offUserUpdated = on('user_updated', (data) => {
+      setUsers(prev => prev.map(u => 
+        u._id === data.user._id ? data.user : u
+      ));
+    });
+
+    return () => {
+      offUserUpdated && offUserUpdated();
+    };
+  }, [on]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -81,34 +97,35 @@ export default function AdminUsersPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="page-layout">
       {/* Page Header */}
-      <div className="flex-between mb-8" style={{ marginBottom: 'var(--s-8)' }}>
+      <div className="flex-between mb-8">
         <div>
-          <h1 style={{ fontSize: '1.875rem' }}>Team Management</h1>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 800 }}>Team Management</h1>
           <p style={{ color: 'var(--text-muted)' }}>Manage your organization's users, roles, and permissions.</p>
         </div>
         <div className="flex-center gap-3">
-          <Badge variant="primary" className="p-2 px-4">{users.length} Total Users</Badge>
+          <Badge variant="primary" style={{ padding: '8px 16px', borderRadius: '24px' }}>{users.length} Active Members</Badge>
         </div>
       </div>
 
       {/* Filter Bar */}
-      <Card className="mb-6" style={{ padding: 'var(--s-4)', marginBottom: 'var(--s-6)' }}>
-        <div className="flex-between gap-4">
-          <div className="flex-1 flex-center gap-4">
-            <div style={{ position: 'relative', width: '100%', maxWidth: '360px' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-dim)' }} />
-              <input 
-                placeholder="Search by name, email or employee ID..." 
-                className="input" 
-                style={{ paddingLeft: '40px' }}
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-            
+      <div className="flex-between gap-4 mb-8" style={{ background: 'white', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div className="flex-center gap-4 flex-1">
+          <div style={{ position: 'relative', width: '100%', maxWidth: '360px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+            <input 
+              placeholder="Search team members..." 
+              className="input" 
+              style={{ paddingLeft: '36px', background: 'var(--bg)', border: '1px solid transparent', height: '36px', fontSize: '0.85rem' }}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          
+          <div className="flex-center gap-2">
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Filter Role</span>
             <select 
               className="input" 
-              style={{ width: '180px' }}
+              style={{ width: '150px', height: '32px', fontSize: '0.8rem', background: 'var(--bg)', border: '1px solid transparent' }}
               value={roleFilter}
               onChange={e => setRoleFilter(e.target.value)}
             >
@@ -116,10 +133,10 @@ export default function AdminUsersPage() {
               {ROLES.map(r => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
             </select>
           </div>
-
-          <Button variant="outline" leftIcon={<Filter size={16} />}>Advanced Filters</Button>
         </div>
-      </Card>
+
+        <Button variant="ghost" size="sm" leftIcon={<Filter size={16} />}>Advanced</Button>
+      </div>
 
       {/* Users Table */}
       <div className="table-container">
@@ -142,14 +159,14 @@ export default function AdminUsersPage() {
                   <tr key={i}><td colSpan="7"><div style={{ height: '48px', background: 'var(--surface-alt)', width: '100%', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} /></td></tr>
                 ))
               ) : (
-                users.map((user, idx) => (
+                users.map((u, idx) => (
                   <motion.tr 
-                    key={user._id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    onClick={() => openEdit(user)}
-                    style={{ cursor: 'pointer' }}
+                    key={u._id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    onClick={() => openEdit(u)}
+                    className="dashboard-row"
                   >
                     <td>
                       <div className="flex-center gap-3">
@@ -157,48 +174,48 @@ export default function AdminUsersPage() {
                           className="flex-center" 
                           style={{ 
                             width: '40px', height: '40px', 
-                            background: getAvatarColor(user.name), 
-                            borderRadius: 'var(--r-md)', color: 'white', fontWeight: 700 
+                            background: getAvatarColor(u.name), 
+                            borderRadius: '10px', color: 'white', fontWeight: 700 
                           }}
                         >
-                          {getInitials(user.name)}
+                          {getInitials(u.name)}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 700 }}>{user.name}</div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-dark)' }}>{u.name}</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Mail size={12} /> {user.email}
+                            <Mail size={12} /> {u.email}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <Badge variant={user.role === 'admin' ? 'danger' : user.role === 'support_agent' ? 'primary' : 'secondary'}>
-                        {user.role.replace('_', ' ')}
+                      <Badge variant={u.role === 'admin' ? 'danger' : u.role === 'support_agent' ? 'primary' : 'secondary'}>
+                        {u.role.replace('_', ' ')}
                       </Badge>
                     </td>
                     <td>
-                      <div className="flex-center gap-2" style={{ fontSize: '0.875rem' }}>
-                        <Building2 size={14} color="var(--text-dim)" /> {user.department}
+                      <div className="flex-center gap-2" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                        <Building2 size={14} color="var(--text-dim)" /> {u.department}
                       </div>
                     </td>
                     <td>
-                      {user.role === 'support_agent' ? (
-                        <div style={{ fontWeight: 600 }}>{user.currentWorkload || 0} Tickets</div>
-                      ) : '—'}
+                      {u.role === 'support_agent' ? (
+                        <div style={{ fontWeight: 700, color: 'var(--primary)' }}>{u.currentWorkload || 0} Open Tickets</div>
+                      ) : <span style={{ color: 'var(--text-dim)' }}>—</span>}
                     </td>
-                    <td style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>
-                       {user.lastLogin ? timeAgo(user.lastLogin) : 'Never'}
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
+                       {u.lastLogin ? timeAgo(u.lastLogin) : 'Never'}
                     </td>
                     <td>
                       <div className="flex-center gap-2">
-                        {user.isActive ? (
-                          <><CheckCircle2 size={14} color="var(--success)" /> <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>Active</span></>
+                        {u.isActive ? (
+                          <><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)' }} /> <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--success)' }}>Online</span></>
                         ) : (
-                          <><XCircle size={14} color="var(--danger)" /> <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--danger)' }}>Inactive</span></>
+                          <><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--text-dim)' }} /> <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-dim)' }}>Offline</span></>
                         )}
                       </div>
                     </td>
-                    <td><button className="p-2 hover-surface rounded-md"><MoreHorizontal size={18} color="var(--text-dim)" /></button></td>
+                    <td><button className="row-action-btn"><MoreHorizontal size={18} /></button></td>
                   </motion.tr>
                 ))
               )}

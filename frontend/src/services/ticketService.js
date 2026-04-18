@@ -13,7 +13,10 @@ export const ticketService = {
   submitFeedback: (id, data) => api.post(`/tickets/${id}/feedback`, data),
   suggestPriority: (data) => api.post('/tickets/suggest-priority', data),
   findSimilar: (params) => api.get('/tickets/similar', { params }),
-  delete: (id) => api.delete(`/tickets/${id}`)
+  delete: (id) => api.delete(`/tickets/${id}`),
+  createReassignRequest: (id, data) => api.post(`/tickets/${id}/reassign-request`, data),
+  getReassignRequests: (params) => api.get('/tickets/reassign/requests', { params }),
+  processReassignRequest: (requestId, data) => api.patch(`/tickets/reassign/requests/${requestId}`, data)
 };
 
 export const commentService = {

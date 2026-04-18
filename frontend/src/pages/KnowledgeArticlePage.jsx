@@ -117,15 +117,17 @@ export default function KnowledgeArticlePage() {
          )}
       </section>
 
-      <Card style={{ background: 'var(--primary)', color: 'white', marginTop: 'var(--s-12)' }}>
-         <div className="flex-between">
-            <div style={{ textAlign: 'left' }}>
-               <h4 style={{ color: 'white', fontSize: '1.25rem', fontWeight: 700, marginBottom: 'var(--s-1)' }}>Still have questions?</h4>
-               <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.875rem' }}>Our support team is always here to help you out.</p>
-            </div>
-            <Button variant="secondary" onClick={() => navigate('/tickets/new')}>Raise a Ticket</Button>
-         </div>
-      </Card>
+      {user?.role !== 'admin' && (
+        <Card style={{ background: 'var(--primary)', color: 'white', marginTop: 'var(--s-12)' }}>
+           <div className="flex-between">
+              <div style={{ textAlign: 'left' }}>
+                 <h4 style={{ color: 'white', fontSize: '1.25rem', fontWeight: 700, marginBottom: 'var(--s-1)' }}>Still have questions?</h4>
+                 <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.875rem' }}>Our support team is always here to help you out.</p>
+              </div>
+              <Button variant="secondary" onClick={() => navigate('/tickets/new')}>Raise a Ticket</Button>
+           </div>
+        </Card>
+      )}
     </motion.div>
   );
 }

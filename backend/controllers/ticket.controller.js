@@ -140,12 +140,8 @@ const getTickets = async (req, res, next) => {
     if (req.user.role === 'employee') {
       query.createdBy = req.user._id;
     } else if (req.user.role === 'support_agent') {
-      if (myTickets === 'true') {
-        query.assignedTo = req.user._id;
-      } else {
-        // Support agents see tickets in their department/expertise
-        query.category = { $in: [req.user.department, ...req.user.expertise] };
-      }
+      // Agents are strictly restricted to their own assigned tickets
+      query.assignedTo = req.user._id;
     } else if (req.user.role === 'admin') {
       // If the admin belongs to the "Admin" department, they see everything (Super Admin)
       // Otherwise, they only see tickets for their specific department
@@ -293,6 +289,13 @@ const updateStatus = async (req, res, next) => {
       timestamp: new Date()
     });
 
+    // Broadcast to role rooms so list pages update in real-time
+    const statusPayload = { ticketId: ticket._id, status, changedBy: { name: req.user.name } };
+    emitToRole('admin', 'ticket_status_changed', statusPayload);
+    emitToRole('support_agent', 'ticket_status_changed', statusPayload);
+    // Also notify the ticket creator
+    if (ticket.createdBy?._id) emitToUser(ticket.createdBy._id.toString(), 'ticket_status_changed', statusPayload);
+
     res.json({ success: true, message: 'Status updated', ticket });
   } catch (err) {
     next(err);
@@ -330,6 +333,11 @@ const assignTicket = async (req, res, next) => {
       ticketId: ticket._id,
       assignedTo: { _id: agent._id, name: agent.name }
     });
+
+    // Broadcast to role rooms so list pages update in real-time
+    const assignPayload = { ticketId: ticket._id, assignedTo: { _id: agent._id, name: agent.name }, status: ticket.status };
+    emitToRole('admin', 'ticket_assignment_changed', assignPayload);
+    emitToRole('support_agent', 'ticket_assignment_changed', assignPayload);
 
     res.json({ success: true, message: 'Ticket assigned', ticket });
   } catch (err) {
@@ -385,6 +393,11 @@ const reopenTicket = async (req, res, next) => {
 
     emitToTicket(ticket._id.toString(), 'ticket_reopened', { ticketId: ticket._id, reason });
 
+    // Broadcast to role rooms so list pages update in real-time
+    const statusPayload = { ticketId: ticket._id, status: 'reopened', changedBy: { name: req.user.name } };
+    emitToRole('admin', 'ticket_status_changed', statusPayload);
+    emitToRole('support_agent', 'ticket_status_changed', statusPayload);
+
     res.json({ success: true, message: 'Ticket reopened', ticket });
   } catch (err) {
     next(err);
@@ -416,6 +429,12 @@ const submitFeedback = async (req, res, next) => {
     ticket.status = 'closed';
     ticket.statusHistory.push({ from: ticket.status, to: 'closed', changedBy: req.user._id, reason: 'Closed after feedback' });
     await ticket.save();
+
+    // Broadcast status change to 'closed'
+    const statusPayload = { ticketId: ticket._id, status: 'closed', changedBy: { name: req.user.name } };
+    emitToRole('admin', 'ticket_status_changed', statusPayload);
+    emitToRole('support_agent', 'ticket_status_changed', statusPayload);
+    emitToTicket(ticket._id.toString(), 'status_updated', statusPayload);
 
     res.json({ success: true, message: 'Feedback submitted. Thank you!', ticket });
   } catch (err) {
@@ -488,6 +507,11 @@ const updatePriority = async (req, res, next) => {
     await ticket.save();
 
     emitToTicket(ticket._id.toString(), 'priority_updated', { ticketId: ticket._id, priority, changedBy: req.user.name });
+
+    // Broadcast to role rooms so list pages update in real-time
+    const priorityPayload = { ticketId: ticket._id, priority, changedBy: req.user.name };
+    emitToRole('admin', 'ticket_priority_changed', priorityPayload);
+    emitToRole('support_agent', 'ticket_priority_changed', priorityPayload);
 
     res.json({ success: true, message: 'Priority updated', ticket });
   } catch (err) {

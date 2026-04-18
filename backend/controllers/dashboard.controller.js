@@ -1,6 +1,7 @@
 const Ticket = require('../models/Ticket.model');
 const User = require('../models/User.model');
 const Comment = require('../models/Comment.model');
+const ReassignRequest = require('../models/ReassignRequest.model');
 
 // @desc    Employee dashboard stats
 // @route   GET /api/dashboard/employee
@@ -90,7 +91,8 @@ const getAdminDashboard = async (req, res, next) => {
     const [
       statusCounts, priorityCounts, slaBreached,
       topAgents, categoryBreakdown, criticalTickets,
-      last7DaysTrend, slaAlerts, totalUsers
+      last7DaysTrend, slaAlerts, totalUsers, avgResolution,
+      pendingReassignRequests
     ] = await Promise.all([
       Ticket.aggregate([
         { $match: matchBase },
@@ -140,7 +142,19 @@ const getAdminDashboard = async (req, res, next) => {
           .limit(5)
           .select('ticketId title sla status')
           .lean(),
-        isAgent ? Promise.resolve(null) : User.countDocuments({ isActive: true })
+        isAgent ? Promise.resolve(null) : User.countDocuments({ isActive: true }),
+        Ticket.aggregate([
+          { $match: { ...matchBase, status: { $in: ['resolved', 'closed'] }, 'resolution.resolvedAt': { $exists: true } } },
+          {
+            $project: {
+              resolutionTime: {
+                $divide: [{ $subtract: ['$resolution.resolvedAt', '$createdAt'] }, 3600000]
+              }
+            }
+          },
+          { $group: { _id: null, avg: { $avg: '$resolutionTime' } } }
+        ]),
+        isAgent ? Promise.resolve(0) : ReassignRequest.countDocuments({ status: 'pending' })
       ]);
   
       const statusMap = {};
@@ -165,7 +179,9 @@ const getAdminDashboard = async (req, res, next) => {
           topAgents,
           criticalTickets,
           last7DaysTrend: last7DaysTrend[0],
-          slaAlerts
+          slaAlerts,
+          avgResolutionHours: avgResolution[0]?.avg?.toFixed(1) || 0,
+          pendingReassignRequests: pendingReassignRequests
         }
       });
   } catch (err) {

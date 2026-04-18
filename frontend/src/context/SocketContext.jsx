@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
@@ -8,6 +8,7 @@ export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
+  const pendingJoinsRef = useRef(new Set());
 
   useEffect(() => {
     if (!user) {
@@ -27,25 +28,45 @@ export const SocketProvider = ({ children }) => {
       reconnectionDelay: 1000
     });
 
-    socket.on('connect', () => { setConnected(true); });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setConnected(true);
+      // Replay any pending room joins after reconnection
+      pendingJoinsRef.current.forEach(ticketId => {
+        socket.emit('join_ticket', ticketId);
+      });
+    });
     socket.on('disconnect', () => { setConnected(false); });
     socket.on('connect_error', (err) => { console.warn('Socket error:', err.message); });
-
-    socketRef.current = socket;
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      setConnected(false);
     };
   }, [user]);
 
-  const joinTicket = (ticketId) => socketRef.current?.emit('join_ticket', ticketId);
-  const leaveTicket = (ticketId) => socketRef.current?.emit('leave_ticket', ticketId);
+  // joinTicket: emit immediately if connected, and track for reconnection replay
+  const joinTicket = useCallback((ticketId) => {
+    pendingJoinsRef.current.add(ticketId);
+    socketRef.current?.emit('join_ticket', ticketId);
+  }, []);
 
-  const on = (event, handler) => {
-    socketRef.current?.on(event, handler);
-    return () => socketRef.current?.off(event, handler);
-  };
+  const leaveTicket = useCallback((ticketId) => {
+    pendingJoinsRef.current.delete(ticketId);
+    socketRef.current?.emit('leave_ticket', ticketId);
+  }, []);
+
+  // on: register listener. Re-created when `connected` changes so consumers
+  // with `[on]` in their dependency array re-register handlers on the live socket.
+  const on = useCallback((event, handler) => {
+    const socket = socketRef.current;
+    if (!socket) return () => {};
+    socket.on(event, handler);
+    return () => socket.off(event, handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
 
   return (
     <SocketContext.Provider value={{ socket: socketRef.current, connected, joinTicket, leaveTicket, on }}>

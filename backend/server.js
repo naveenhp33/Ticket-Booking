@@ -127,15 +127,42 @@ server.listen(PORT, () => {
   console.log(`\n🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
   console.log(`📡 Socket.io initialized`);
 
-  // Start email poller only if real Gmail credentials are configured
-  const hasRealGmailToken = process.env.GMAIL_REFRESH_TOKEN &&
-    !process.env.GMAIL_REFRESH_TOKEN.includes('your_gmail');
-  if (hasRealGmailToken) {
+  // Start email poller if configured
+  const method = process.env.EMAIL_POLLING_METHOD || 'GMAIL';
+  const hasGmailConfig = process.env.GMAIL_REFRESH_TOKEN && !process.env.GMAIL_REFRESH_TOKEN.includes('your_gmail');
+  const hasImapConfig = process.env.IMAP_USER && !process.env.IMAP_USER.includes('itadmin@vdartinc.com'); // Check if user changed it from placeholder? Actually let's just check if it's there
+  
+  if ((method === 'GMAIL' && hasGmailConfig) || (method === 'IMAP' && process.env.IMAP_USER)) {
     startEmailPoller();
-    console.log(`📧 Gmail email poller started`);
-  } else {
-    console.log(`📧 Gmail not configured, email polling disabled`);
+    console.log(`📧 ${method} email poller started`);
   }
+  
+  // RUN SYSTEM SANITY CHECKS (Refactored logic from legacy utility scripts)
+  const User = require('./models/User.model');
+  const Ticket = require('./models/Ticket.model');
+  
+  (async () => {
+    try {
+      // 1. Fix negative workloads (from fix-agents.js)
+      const fixResults = await User.updateMany({ currentWorkload: { $lt: 0 } }, { $set: { currentWorkload: 0 } });
+      if (fixResults.modifiedCount > 0) console.log(`🔧 HealthCheck: Fixed ${fixResults.modifiedCount} negative workloads.`);
+      
+      // 2. Normalize IT admin expertise (from fix-agents.js)
+      const adminResults = await User.updateMany(
+        { role: 'admin', department: 'IT', expertise: { $size: 0 } },
+        { $set: { expertise: ['IT'] } }
+      );
+      if (adminResults.modifiedCount > 0) console.log(`🔧 HealthCheck: Initialized expertise for ${adminResults.modifiedCount} IT admins.`);
+      
+      // 3. Log agent summary (from check-agents.js)
+      const activeAgents = await User.find({ role: { $in: ['support_agent', 'admin'] }, isActive: true }).countDocuments();
+      console.log(`📡 HealthCheck: ${activeAgents} agents currently active and monitored.`);
+      
+      // 4. One-time patch for TKT-00005 (from fix-ticket.js)
+      await Ticket.updateOne({ ticketId: 'TKT-00005', category: { $ne: 'IT' } }, { $set: { category: 'IT' } });
+      
+    } catch (e) { console.error('❌ HealthCheck Error:', e.message); }
+  })();
 });
 
 module.exports = { app, server };

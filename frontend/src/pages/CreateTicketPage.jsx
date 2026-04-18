@@ -104,7 +104,10 @@ export default function CreateTicketPage() {
                   <select 
                     className="input"
                     value={form.department}
-                    onChange={e => setForm({...form, department: e.target.value})}
+                    onChange={e => {
+                      const dept = e.target.value;
+                      setForm({...form, department: dept, category: dept});
+                    }}
                     required
                   >
                     <option value="">Select Department</option>

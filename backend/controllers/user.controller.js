@@ -1,5 +1,6 @@
 const User = require('../models/User.model');
 const Ticket = require('../models/Ticket.model');
+const { emitToRole } = require('../config/socket');
 
 // @desc    Get all users (admin)
 // @route   GET /api/users
@@ -81,6 +82,10 @@ const updateUser = async (req, res, next) => {
     ).select('-password');
 
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Real-time
+    emitToRole('admin', 'user_updated', { user });
+
     res.json({ success: true, user });
   } catch (err) {
     next(err);
