@@ -131,11 +131,10 @@ export default function ProfilePage() {
              <button 
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`nav-link ${activeTab === tab.id ? 'active' : ''}`}
-              style={{ width: '100%', border: 'none', background: 'transparent' }}
+              className={`premium-nav-item ${activeTab === tab.id ? 'active' : ''}`}
              >
                <tab.icon size={18} />
-               <span style={{ fontWeight: 600 }}>{tab.label}</span>
+               <span>{tab.label}</span>
              </button>
            ))}
         </div>
@@ -147,7 +146,7 @@ export default function ProfilePage() {
                <motion.div key="profile" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
                  <Card title="Personal Information" subtitle="Update your basic profile details here.">
                     <form onSubmit={handleUpdateProfile} className="flex-col gap-6">
-                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--s-6)' }}>
+                       <div className="form-grid-2">
                           <Input label="Full Name" value={profile.name} onChange={e => setProfile({...profile, name: e.target.value})} />
                           <Input label="Designation" value={profile.designation} onChange={e => setProfile({...profile, designation: e.target.value})} />
                           <Input label="Phone Number" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} />
@@ -163,7 +162,7 @@ export default function ProfilePage() {
                        
                        <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 'var(--s-6)' }}>
                           <h4 style={{ marginBottom: 'var(--s-4)', fontSize: '0.9rem' }}>Work Location</h4>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--s-4)' }}>
+                          <div className="form-grid-3">
                              <Input label="Floor" value={profile.location.floor} onChange={e => setProfile({...profile, location: {...profile.location, floor: e.target.value}})} />
                              <Input label="Branch" value={profile.location.branch} onChange={e => setProfile({...profile, location: {...profile.location, branch: e.target.value}})} />
                              <Input label="City" value={profile.location.city} onChange={e => setProfile({...profile, location: {...profile.location, city: e.target.value}})} />
@@ -183,7 +182,7 @@ export default function ProfilePage() {
                  <Card title="Security Settings" subtitle="Keep your account secure with a strong password.">
                     <form onSubmit={handleChangePassword} className="flex-col gap-6">
                        <Input type="password" label="Current Password" placeholder="••••••••" value={passwords.currentPassword} onChange={e => setPasswords({...passwords, currentPassword: e.target.value})} />
-                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--s-4)' }}>
+                       <div className="form-grid-2">
                           <Input type="password" label="New Password" placeholder="••••••••" value={passwords.newPassword} onChange={e => setPasswords({...passwords, newPassword: e.target.value})} />
                           <Input type="password" label="Confirm Password" placeholder="••••••••" value={passwords.confirmPassword} onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} />
                        </div>

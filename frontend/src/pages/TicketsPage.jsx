@@ -236,11 +236,15 @@ export default function TicketsPage() {
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding: '16px' }}><div style={{ fontSize: '0.875rem', color: 'var(--text-dim)', fontWeight: 600 }}>{t.category || t.department}</div></td>
                   <td style={{ padding: '16px' }}>
-                    <div className="flex-center gap-2" style={{ padding: '4px 8px', borderRadius: '6px', background: 'var(--bg)', width: 'fit-content' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, padding: '4px 10px', background: 'var(--surface-alt)', border: '1px solid var(--border)', borderRadius: '6px', display: 'inline-block', color: 'var(--text-main)' }}>
+                      {t.category || t.department}
+                    </div>
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <div className="flex-center gap-2" style={{ padding: '6px 12px', borderRadius: '8px', background: t.priority === 'critical' ? '#FEF2F2' : t.priority === 'high' ? '#FFFBEB' : '#EFF6FF', width: 'fit-content' }}>
                        <span className={`priority-indicator priority-${t.priority}`} style={{ width: '8px', height: '8px' }} />
-                       <span style={{ textTransform: 'capitalize', fontWeight: 700, fontSize: '0.85rem' }}>{t.priority}</span>
+                       <span style={{ textTransform: 'capitalize', fontWeight: 700, fontSize: '0.85rem', color: t.priority === 'critical' ? '#991B1B' : t.priority === 'high' ? '#92400E' : '#1E40AF' }}>{t.priority}</span>
                     </div>
                   </td>
                   <td style={{ padding: '16px' }}>
@@ -304,10 +308,10 @@ export default function TicketsPage() {
         .ticket-id-tag {
           font-weight: 800;
           color: var(--primary);
-          font-size: 0.75rem;
-          background: #EFF6FF;
-          padding: 4px 8px;
-          borderRadius: 6px;
+          font-size: 0.8rem;
+          background: var(--primary-light);
+          padding: 6px 10px;
+          borderRadius: 8px;
         }
         .ticket-subject {
           font-weight: 700;

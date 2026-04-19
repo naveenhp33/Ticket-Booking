@@ -291,7 +291,7 @@ export default function TicketDetailPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 'var(--s-8)' }}>
+      <div className="create-ticket-grid">
         <div className="flex-col gap-6">
           {/* Main Content */}
           <Card>
