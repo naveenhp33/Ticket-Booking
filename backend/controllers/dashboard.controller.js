@@ -10,7 +10,7 @@ const getEmployeeDashboard = async (req, res, next) => {
   try {
     const userId = req.user._id;
 
-    const [statusCounts, priorityCounts, recentTickets, avgResolution, last7DaysTrend] = await Promise.all([
+    const [statusCounts, priorityCounts, recentTickets, avgResolution, last7DaysTrend, pendingFeedback] = await Promise.all([
       Ticket.aggregate([
         { $match: { createdBy: userId } },
         { $group: { _id: '$status', count: { $sum: 1 } } }
@@ -48,7 +48,9 @@ const getEmployeeDashboard = async (req, res, next) => {
             ]
           }
         }
-      ])
+      ]),
+      // Count resolved tickets without feedback (pending employee rating)
+      Ticket.countDocuments({ createdBy: userId, status: 'resolved', 'feedback.rating': { $exists: false } })
     ]);
 
     const statusMap = {};
@@ -69,6 +71,7 @@ const getEmployeeDashboard = async (req, res, next) => {
         resolved: (statusMap.resolved || 0) + (statusMap.closed || 0),
         closed: statusMap.closed || 0,
         reopened: statusMap.reopened || 0,
+        pendingFeedback: pendingFeedback || 0,
         priorityBreakdown: priorityMap,
         avgResolutionHours: avgResolution[0]?.avg?.toFixed(1) || 0,
         last7DaysTrend: last7DaysTrend[0]

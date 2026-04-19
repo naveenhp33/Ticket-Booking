@@ -90,8 +90,8 @@ export default function TicketsPage() {
       .then(res => {
         setTickets(res.data.tickets);
         setPagination({
-          page: res.data.page,
-          totalPages: res.data.totalPages
+          page: res.data.pagination?.page || 1,
+          totalPages: res.data.pagination?.pages || 1
         });
         setLoading(false);
       })

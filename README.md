@@ -63,19 +63,29 @@
 ---
 
 ## Technical Features Implemented
-- **Smart Scoring**: Auto-priority based on impact/urgency
-- **Real-time Notifications**: Socket.io integration
-- **Advanced UI**: Typography-first redesign (Inter font-face)
-- **Dashboard Analytics**: Analytics visuals for Admin
+- **Smart Priority Scoring**: Intelligent algorithm mathematically determining root ticket weight via impact formulas.
+- **Duplicate Detection**: Intercepts the employee creation flow via debounced searches to suggest pre-existing issues.
+- **Executive Escalations**: Hierarchy-aware workflows bypassing standard user queues to alert the Head of IT instantly.
+- **Real-time Notifications**: Socket.io integration for instant system-wide status updates.
+- **Advanced UI**: Typography-first redesign (Inter font-face) with premium micro-animations.
+- **Dashboard Analytics**: Advanced charting/visuals for systemic Admin and Agent Dashboard views.
+- **Auto Ticket Assignment**: Intelligent load-balancing assignment algorithms based on active agent queue sizes.
+- **Priority-based Escalation**: Automated SLA breach detection, countdown tracking, and priority auto-escalation.
+- **File Attachments**: Secure Multer-based file uploads appended natively to tickets.
+- **Live Ticket Chat**: Real-time bidirectional conversation threads using comments & WebSockets.
+
+---
+
+## Technical Documentation
+For a comprehensive architectural deep-dive into the custom intelligence mechanics powering this ticketing system, please refer to the following internal documents:
+1. [The Knowledge-Based Priority Engine](./KNOWLEDGE_PRIORITY.md) — Outlines the 3-Layer scoring algorithm, text analysis rules, and the Historical Learning Layer.
+2. [Executive Hierarchy Design](./ORG_HIERARCHY_DESIGN.md) — Details organizational VIP weighting, fast-track assignment bypassing, and strict HR routing confidentiality.
 
 ---
 
 ## Future Enhancements
-- Auto ticket assignment
-- Priority-based escalation
-- Real-time chat
-- File attachments
-- Dashboard analytics
+- AI-based resolution suggestions
+- Mobile application deployment
 
 ---
 

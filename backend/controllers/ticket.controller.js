@@ -181,7 +181,7 @@ const getTickets = async (req, res, next) => {
         { path: 'createdBy', select: 'name email department avatar' },
         { path: 'assignedTo', select: 'name email department avatar' }
       ],
-      lean: false
+      lean: true
     };
 
     const result = await Ticket.paginate(query, options);
@@ -215,7 +215,8 @@ const getTicket = async (req, res, next) => {
       .populate('relatedTickets', 'ticketId title status priority')
       .populate('duplicateOf', 'ticketId title status')
       .populate('statusHistory.changedBy', 'name email')
-      .populate('priorityAudit.changedBy', 'name email');
+      .populate('priorityAudit.changedBy', 'name email')
+      .lean();
 
     if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 

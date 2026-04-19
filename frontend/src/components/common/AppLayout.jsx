@@ -87,10 +87,29 @@ export default function AppLayout() {
     return off;
   }, [on]);
 
-  const navItems = [
-    ...NAV_ITEMS.all,
-    ...(NAV_ITEMS[user?.role] || [])
-  ];
+  let navItems = [];
+  if (user?.role === 'employee') {
+    navItems = [
+      NAV_ITEMS.employee[0], // New Ticket
+      ...NAV_ITEMS.all,
+      NAV_ITEMS.employee[1]  // Profile
+    ];
+  } else if (user?.role === 'support_agent') {
+    navItems = [
+      NAV_ITEMS.support_agent[0], // Dashboard
+      ...NAV_ITEMS.all,
+      NAV_ITEMS.support_agent[1], // My Queue
+      NAV_ITEMS.support_agent[2]  // Profile
+    ];
+  } else if (user?.role === 'admin') {
+    navItems = [
+      NAV_ITEMS.admin[0], // Dashboard
+      ...NAV_ITEMS.all,
+      ...NAV_ITEMS.admin.slice(1) // Users, Reports, Analytics, etc.
+    ];
+  } else {
+    navItems = [...NAV_ITEMS.all];
+  }
 
   const handleSearch = (e) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
@@ -117,7 +136,17 @@ export default function AppLayout() {
 
       {/* PREMIUM SIDEBAR */}
       <aside className={`premium-sidebar hide-mobile ${collapsed ? 'collapsed' : ''}`} style={mobileOpen ? { display: 'flex', position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 50 } : {}}>
-        <div className="premium-sidebar-brand">
+        <div 
+          className="premium-sidebar-brand"
+          onClick={() => {
+            if (user?.role === 'admin' || user?.role === 'support_agent') {
+              navigate('/dashboard');
+            } else {
+              navigate('/tickets');
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+        >
           <div className="premium-brand-icon">T</div>
           <span>TicketDesk</span>
         </div>
@@ -126,16 +155,29 @@ export default function AppLayout() {
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', paddingLeft: '16px' }}>
             Main Menu
           </div>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) => `premium-nav-item ${isActive ? 'active' : ''}`}
-            >
-              <item.icon size={20} />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const checkActive = (isActive) => {
+              if (item.path === '/tickets') {
+                if (location.pathname === '/tickets/new') return false;
+                return isActive && !location.search.includes('myTickets=true');
+              }
+              if (item.path === '/tickets?myTickets=true') {
+                return isActive && location.search.includes('myTickets=true');
+              }
+              return isActive;
+            };
+
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) => `premium-nav-item ${checkActive(isActive) ? 'active' : ''}`}
+              >
+                <item.icon size={20} />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div style={{ padding: '24px 16px', borderTop: '1px solid var(--border)' }}>
@@ -166,14 +208,19 @@ export default function AppLayout() {
           </div>
 
           <div className="premium-header-actions">
-            {user?.role === 'employee' && (
+            {user?.role === 'employee' && location.pathname !== '/tickets/new' && (
               <button className="premium-btn" onClick={() => navigate('/tickets/new')}>
                 <Plus size={18} />
                 <span className="hide-mobile">Create Ticket</span>
               </button>
             )}
 
-            <div style={{ position: 'relative' }} ref={notifRef}>
+            <div 
+              style={{ position: 'relative', paddingBottom: '10px' }} 
+              ref={notifRef}
+              onMouseEnter={() => setNotifOpen(true)}
+              onMouseLeave={() => setNotifOpen(false)}
+            >
               <button 
                 onClick={() => setNotifOpen(!notifOpen)}
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', position: 'relative', padding: '8px' }}
@@ -198,7 +245,17 @@ export default function AppLayout() {
                       {notifications.length === 0 ? (
                         <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.9rem' }}>No notifications</div>
                       ) : notifications.map(n => (
-                        <div key={n._id} style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', cursor: 'pointer' }} className="premium-nav-item">
+                        <div 
+                          key={n._id} 
+                          style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', cursor: 'pointer' }} 
+                          className="premium-nav-item"
+                          onClick={() => {
+                            setNotifOpen(false);
+                            if (n.link || n.ticket) {
+                              navigate(n.link || `/tickets/${n.ticket}`);
+                            }
+                          }}
+                        >
                           <div style={{ fontSize: '1.2rem' }}>🔔</div>
                           <div>
                             <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '0.85rem' }}>{n.title}</div>
@@ -212,7 +269,10 @@ export default function AppLayout() {
               </AnimatePresence>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingLeft: '16px', borderLeft: '1px solid var(--border)' }}>
+            <div 
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingLeft: '16px', borderLeft: '1px solid var(--border)', cursor: 'pointer' }}
+              onClick={() => navigate('/profile')}
+            >
               <div
                 className="premium-avatar"
                 style={{ background: getAvatarColor(user?.name) }}

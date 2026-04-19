@@ -129,12 +129,14 @@ export default function KnowledgePage() {
         <AnimatePresence mode="popLayout">
           {loading ? (
              Array.from({ length: 6 }).map((_, i) => (
-               <Card key={i} style={{ height: '180px', animation: 'pulse 1.5s infinite' }} />
+               <motion.div key={`loading-${i}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                 <Card style={{ height: '180px', animation: 'pulse 1.5s infinite' }} />
+               </motion.div>
              ))
           ) : articles.length === 0 ? (
-            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 'var(--s-12)' }}>
+            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 'var(--s-12)' }}>
                <Badge variant="warning">No articles found</Badge>
-            </div>
+            </motion.div>
           ) : (
             articles.map((article, idx) => {
               const catData = CATEGORY_MAP[article.category] || CATEGORY_MAP.Other;

@@ -297,8 +297,8 @@ export default function TicketDetailPage() {
           <Card>
             <div className="flex-between mb-4">
               <div className="flex-center gap-3">
-                <div className="flex-center" style={{ width: '40px', height: '40px', background: getAvatarColor(ticket.requestedBy?.name), borderRadius: 'var(--r-md)', color: 'white' }}>
-                  {getInitials(ticket.requestedBy?.name)}
+                <div className="flex-center" style={{ width: '40px', height: '40px', background: getAvatarColor(ticket.createdBy?.name), borderRadius: 'var(--r-md)', color: 'white' }}>
+                  {getInitials(ticket.createdBy?.name)}
                 </div>
                 <div>
                   <div style={{ fontWeight: 700 }}>{ticket.createdBy?.name}</div>

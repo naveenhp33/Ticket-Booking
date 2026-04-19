@@ -372,3 +372,122 @@ body {
   from { opacity: 0; transform: translateY(100%) scale(0.9); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* --- Badge info --- */
+.badge-info { background: #DBEAFE; color: #1E40AF; }
+
+/* --- Button Danger --- */
+.btn-danger { background: var(--danger); color: white; border: none; }
+.btn-danger:hover:not(:disabled) { background: #DC2626; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+
+/* --- Button Spinner (named spinner) --- */
+.spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  animation: spin 0.7s linear infinite;
+}
+.btn-outline .spinner, .btn-ghost .spinner { border-color: var(--border); border-top-color: var(--primary); }
+
+/* --- Nav Link (ProfilePage sidebar) --- */
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--t-fast);
+  text-decoration: none;
+}
+.nav-link:hover { background: var(--surface-alt); color: var(--text-main); }
+.nav-link.active { background: var(--primary-light); color: var(--primary); font-weight: 700; }
+
+/* --- Table Container --- */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  background: white;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.table-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table-container th {
+  padding: 14px 20px;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #F8FAFC;
+  border-bottom: 1px solid var(--border);
+}
+.table-container td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+.table-container tr:last-child td { border-bottom: none; }
+
+/* --- Modal --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.modal {
+  background: white;
+  border-radius: var(--r-xl);
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+}
+.modal-header {
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+.modal-body {
+  padding: 24px 28px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-footer {
+  padding: 16px 28px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  background: var(--surface-alt);
+}
+
+/* --- Success light & text-dark variables --- */
+:root {
+  --success-light: #F0FDF4;
+  --success-dark: #166534;
+  --text-dark: #0F172A;
+  --muted: #94A3B8;
+  --card: white;
+}
+
+/* --- page-layout inner padding --- */
+.page-layout { padding: var(--s-8); }

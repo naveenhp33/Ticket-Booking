@@ -8,7 +8,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   AlertCircle,
-  Activity
+  Activity,
+  Star
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -137,6 +138,7 @@ export default function DashboardPage() {
         setStats({
           total: s.total || 0,
           pending: (s.open || 0) + (s.assigned || 0) + (s.in_progress || 0),
+          pendingFeedback: s.pendingFeedback || 0,
           resolved: s.resolved || 0,
           avgResolutionTime: s.avgResolutionHours || 0,
           priorityBreakdown: s.priorityBreakdown || {},
@@ -164,6 +166,7 @@ export default function DashboardPage() {
 
   // RENDER FOR EMPLOYEE
   if (!isAdminOrAgent) {
+    if (loading) return (<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', width: '100%', padding: '80px' }}><div className={"button-spinner"} style={{ width: '32px', height: '32px', borderColor: 'var(--primary)', borderTopColor: 'transparent' }} /></div>);
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="page-layout">
         <div className="flex-between mb-8" style={{ background: 'linear-gradient(135deg, #0EA5E9 0%, #2563EB 100%)', padding: 'var(--s-8)', borderRadius: 'var(--r-lg)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.2)' }}>
@@ -363,7 +366,7 @@ export default function DashboardPage() {
                 <Badge variant="success">Completed</Badge>
               </div>
               <div style={{ height: '240px' }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <LineChart data={chartData}>
                     <defs>
                       <linearGradient id="resolvedGradient" x1="0" y1="0" x2="0" y2="1">
@@ -386,7 +389,7 @@ export default function DashboardPage() {
                 <h3 className="premium-card-title">Ticket Volume</h3>
               </div>
               <div style={{ height: '260px' }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted)' }} dy={10} />
@@ -464,7 +467,7 @@ export default function DashboardPage() {
               <h3 className="premium-card-title">Priority Breakdown</h3>
             </div>
             <div style={{ height: '200px' }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={priorityData}

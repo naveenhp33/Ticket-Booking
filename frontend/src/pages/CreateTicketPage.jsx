@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Send, 
@@ -11,7 +11,8 @@ import {
 import { ticketService } from '../services/ticketService';
 import { useToast } from '../context/ToastContext';
 import { Button, Input, Card } from '../ui';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useDebounce } from '../hooks/useDebounce';
 
 const DEPARTMENTS = ['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 'Sales', 'Legal'];
 const PRIORITIES = [
@@ -34,6 +35,24 @@ export default function CreateTicketPage() {
   });
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState([]);
+
+  const [similarTickets, setSimilarTickets] = useState([]);
+  const [isSearchingSimilar, setIsSearchingSimilar] = useState(false);
+  const debouncedTitle = useDebounce(form.title, 600);
+
+  useEffect(() => {
+    if (debouncedTitle.trim().length > 4) {
+      setIsSearchingSimilar(true);
+      ticketService.findSimilar({ title: debouncedTitle, category: form.category })
+        .then(res => {
+          setSimilarTickets(res.data.tickets || []);
+          setIsSearchingSimilar(false);
+        })
+        .catch(() => setIsSearchingSimilar(false));
+    } else {
+      setSimilarTickets([]);
+    }
+  }, [debouncedTitle, form.category]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,13 +97,63 @@ export default function CreateTicketPage() {
         <form onSubmit={handleSubmit} className="flex-col gap-6">
           <Card>
             <div className="flex-col gap-6">
-              <Input 
-                label="Subject / Title" 
-                placeholder="Briefly describe the issue..."
-                value={form.title}
-                onChange={e => setForm({...form, title: e.target.value})}
-                required
-              />
+              <div className="flex-col gap-1">
+                <Input 
+                  label="Subject / Title" 
+                  placeholder="Briefly describe the issue..."
+                  value={form.title}
+                  onChange={e => setForm({...form, title: e.target.value})}
+                  required
+                />
+                
+                <AnimatePresence>
+                  {similarTickets.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      style={{ 
+                        marginTop: '8px', 
+                        padding: '12px', 
+                        background: '#FFFBEB', 
+                        border: '1px solid #FDE68A', 
+                        borderRadius: 'var(--r-md)',
+                        fontSize: '0.85rem',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <div className="flex-center gap-2" style={{ color: '#D97706', fontWeight: 700, marginBottom: '12px' }}>
+                        <AlertTriangle size={16} /> 
+                        {similarTickets.length} similar ticket{similarTickets.length > 1 ? 's' : ''} found — are any of these your issue?
+                      </div>
+                      <div className="flex-col gap-2">
+                        {similarTickets.map(t => (
+                          <div 
+                            key={t._id} 
+                            onClick={() => window.open(`/tickets/${t._id}`, '_blank')}
+                            style={{ 
+                              padding: '8px 12px', 
+                              background: '#fff', 
+                              border: '1px solid #FDE68A', 
+                              borderRadius: '6px', 
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#FEF3C7'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                            onMouseOut={e => { e.currentTarget.style.backgroundColor = '#fff'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                          >
+                            <span style={{ fontWeight: 600, color: 'var(--text-dark)' }}>{t.title}</span>
+                            <span style={{ color: 'var(--text-dim)', textTransform: 'capitalize', fontSize: '0.75rem', fontWeight: 600 }}>{t.status.replace('_', ' ')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               <div className="input-group">
                 <label className="input-label">Issue Details</label>
