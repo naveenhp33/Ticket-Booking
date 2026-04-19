@@ -8,7 +8,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   AlertCircle,
-  Activity
+  Activity,
+  Star
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -166,15 +167,15 @@ export default function DashboardPage() {
   if (!isAdminOrAgent) {
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="page-layout">
-        <div className="flex-between mb-8" style={{ background: 'linear-gradient(135deg, #0EA5E9 0%, #2563EB 100%)', padding: 'var(--s-8)', borderRadius: 'var(--r-lg)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.2)' }}>
+        <div className="flex-between mb-8" style={{ background: 'linear-gradient(135deg, #1E40AF 0%, #0F172A 100%)', padding: 'var(--s-8)', borderRadius: 'var(--r-xl)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 30px -10px rgba(30, 64, 175, 0.4)' }}>
           <div>
             <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'white' }}>How can we help, {user?.name.split(' ')[0]}?</h1>
             <p style={{ opacity: 0.9 }}>Check the status of your requests or find answers in the knowledge base.</p>
           </div>
-          <Button onClick={() => navigate('/tickets/new')} style={{ background: 'white', color: 'var(--primary)', fontWeight: 700 }}>New Support Ticket</Button>
+          <Button onClick={() => navigate('/tickets/new')} style={{ background: 'white', color: 'var(--text-main)', fontWeight: 700, borderRadius: 'var(--r-md)' }}>New Support Ticket</Button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--s-6)', marginBottom: 'var(--s-8)' }}>
+        <div className="dashboard-grid" style={{ marginBottom: 'var(--s-8)' }}>
            <div className="premium-stat-card" style={{ border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
               <div className="flex-between">
                 <div>
@@ -213,7 +214,7 @@ export default function DashboardPage() {
            </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 'var(--s-8)' }}>
+        <div className="create-ticket-grid">
            <div className="premium-card">
               <div className="flex-between mb-6">
                 <h3 style={{ fontWeight: 800, fontSize: '1.1rem' }}>My Recent Tickets</h3>
@@ -277,18 +278,18 @@ export default function DashboardPage() {
       className="page-layout"
     >
       {/* Hero Header */}
-      <div className="flex-between mb-8" style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)', padding: 'var(--s-8)', borderRadius: 'var(--r-lg)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.2)' }}>
+      <div className="flex-between mb-8" style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #020617 100%)', padding: 'var(--s-8)', borderRadius: 'var(--r-xl)', color: 'white', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 10px 30px -10px rgba(30, 58, 138, 0.5)' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'white' }}>Welcome back, Team!</h1>
-          <p style={{ opacity: 0.9 }}>Here’s your support performance overview for today.</p>
+          <p style={{ opacity: 0.85 }}>Here’s your support performance overview for today.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="premium-btn" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>Download Report</button>
+          <button className="premium-btn" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', backdropFilter: 'blur(10px)' }}>Download Report</button>
         </div>
       </div>
 
       {/* KPI Stat Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--s-6)', marginBottom: 'var(--s-8)' }}>
+      <div className="dashboard-grid-4" style={{ marginBottom: 'var(--s-8)' }}>
         <div className="premium-stat-card" style={{ border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
           <div className="flex-between">
             <div>
@@ -356,7 +357,7 @@ export default function DashboardPage() {
         <div className="flex-col" style={{ gap: '24px' }}>
           
           {/* Charts Section */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div className="split-grid">
             <div className="premium-card">
               <div className="flex-between mb-6">
                 <h3 style={{ fontWeight: 800, fontSize: '1.1rem' }}>Weekly Resolution Trend</h3>

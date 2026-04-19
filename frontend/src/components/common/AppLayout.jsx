@@ -150,78 +150,86 @@ export default function AppLayout() {
       <div className="premium-main">
         {/* TOP NAVBAR */}
         <header className="premium-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <button className="hide-desktop" onClick={() => setMobileOpen(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
-              <Menu size={24} />
-            </button>
-            <div className="premium-search hide-mobile">
-              <Search size={18} />
-              <input
-                placeholder="Search anything..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                onKeyDown={handleSearch}
-              />
-            </div>
-          </div>
-
-          <div className="premium-header-actions">
-            {user?.role === 'employee' && (
-              <button className="premium-btn" onClick={() => navigate('/tickets/new')}>
-                <Plus size={18} />
-                <span className="hide-mobile">Create Ticket</span>
+          <div style={{ display: 'flex', width: '100%', maxWidth: '1600px', margin: '0 auto', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }} className="premium-header-inner">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <button className="hide-desktop" onClick={() => setMobileOpen(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
+                <Menu size={24} />
               </button>
-            )}
-
-            <div style={{ position: 'relative' }} ref={notifRef}>
-              <button 
-                onClick={() => setNotifOpen(!notifOpen)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', position: 'relative', padding: '8px' }}
-              >
-                <Bell size={22} />
-                {unreadCount > 0 && <span style={{ position: 'absolute', top: '8px', right: '8px', width: '8px', height: '8px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid var(--card)' }} />}
-              </button>
-              
-              <AnimatePresence>
-                {notifOpen && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    style={{ position: 'absolute', right: 0, top: '48px', width: '320px', zIndex: 100, background: 'var(--card)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}
-                  >
-                    <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Notifications</span>
-                      <button onClick={() => setUnreadCount(0)} style={{ fontSize: '0.8rem', color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Clear</button>
-                    </div>
-                    <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
-                      {notifications.length === 0 ? (
-                        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.9rem' }}>No notifications</div>
-                      ) : notifications.map(n => (
-                        <div key={n._id} style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', cursor: 'pointer' }} className="premium-nav-item">
-                          <div style={{ fontSize: '1.2rem' }}>🔔</div>
-                          <div>
-                            <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '0.85rem' }}>{n.title}</div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px' }}>{n.message}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingLeft: '16px', borderLeft: '1px solid var(--border)' }}>
-              <div
-                className="premium-avatar"
-                style={{ background: getAvatarColor(user?.name) }}
-              >
-                {getInitials(user?.name)}
+              <div className="premium-search hide-mobile">
+                <Search size={18} />
+                <input
+                  placeholder="Search anything..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={handleSearch}
+                />
               </div>
-              <div className="hide-mobile">
-                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text)' }}>{user?.name || 'User'}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'capitalize' }}>{user?.role?.replace('_', ' ') || 'Role'}</div>
+            </div>
+
+            <div className="premium-header-actions">
+              {user?.role === 'employee' && (
+                <button className="premium-btn" onClick={() => navigate('/tickets/new')}>
+                  <Plus size={18} />
+                  <span className="hide-mobile">Create Ticket</span>
+                </button>
+              )}
+
+              <div style={{ position: 'relative' }} ref={notifRef}>
+                <button 
+                  onClick={() => setNotifOpen(!notifOpen)}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', position: 'relative', padding: '8px' }}
+                >
+                  <Bell size={22} />
+                  {unreadCount > 0 && <span style={{ position: 'absolute', top: '8px', right: '8px', width: '8px', height: '8px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid var(--card)' }} />}
+                </button>
+                
+                <AnimatePresence>
+                  {notifOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      style={{ 
+                        position: 'absolute', top: 'calc(100% + 8px)', right: 0, 
+                        width: '320px', background: 'var(--card)', 
+                        borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', 
+                        boxShadow: 'var(--shadow-lg)', zIndex: 100, overflow: 'hidden' 
+                      }}
+                    >
+                      <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>Notifications</h3>
+                        <button onClick={markAllRead} style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>Mark all read</button>
+                      </div>
+                      <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
+                        {notifications.length === 0 ? (
+                          <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.9rem' }}>No new notifications</div>
+                        ) : notifications.map(n => (
+                          <div key={n._id} style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', cursor: 'pointer' }} className="premium-nav-item">
+                            <div style={{ fontSize: '1.2rem' }}>🔔</div>
+                            <div>
+                              <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '0.85rem' }}>{n.title}</div>
+                              <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px' }}>{n.message}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingLeft: '16px', borderLeft: '1px solid var(--border)' }}>
+                <div
+                  className="premium-avatar"
+                  style={{ background: getAvatarColor(user?.name) }}
+                >
+                  {getInitials(user?.name)}
+                </div>
+                <div className="hide-mobile">
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text)' }}>{user?.name || 'User'}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'capitalize' }}>{user?.role?.replace('_', ' ') || 'Role'}</div>
+                </div>
               </div>
             </div>
           </div>

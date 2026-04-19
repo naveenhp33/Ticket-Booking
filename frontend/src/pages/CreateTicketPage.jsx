@@ -74,7 +74,7 @@ export default function CreateTicketPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 'var(--s-8)' }}>
+      <div className="create-ticket-grid">
         <form onSubmit={handleSubmit} className="flex-col gap-6">
           <Card>
             <div className="flex-col gap-6">
@@ -98,7 +98,7 @@ export default function CreateTicketPage() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--s-4)' }}>
+              <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">Target Department</label>
                   <select 

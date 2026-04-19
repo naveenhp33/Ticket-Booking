@@ -79,7 +79,7 @@ export default function RegisterPage() {
               leftIcon={<User size={18} />}
             />
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--s-4)' }}>
+            <div className="form-grid-2">
               <Input 
                 label="Work Email" 
                 placeholder="name@vdartinc.com" 
@@ -96,7 +96,7 @@ export default function RegisterPage() {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--s-4)' }}>
+            <div className="form-grid-2">
                <div className="input-group">
                  <label className="input-label">Department</label>
                  <select className="input" value={form.department} onChange={e => setForm({...form, department: e.target.value})}>
