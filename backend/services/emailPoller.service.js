@@ -42,7 +42,7 @@ const getHeaderValue = (headers, name) => {
 
 const detectCategoryFromEmail = (subject, body) => {
   const text = `${subject} ${body}`.toLowerCase();
-  if (text.match(/\b(laptop|computer|network|vpn|software|hardware|printer|wifi|password|email|it|system|keyboard|mouse|monitor|screen|crash|os|windows|mac|update|bug|app|login)\b/)) return 'IT';
+  if (text.match(/\b(laptop|computer|network|vpn|software|hardware|printer|wifi|password|email|it|system|keyboard|mouse|monitor|screen|crash|os|windows|mac|update|bug|app|login|display|reset|access|outlook|teams|internet|browser|chrome)\b/)) return 'IT';
   if (text.match(/\b(salary|payroll|leave|hr|onboarding|offer|contract|attendance)\b/)) return 'HR';
   if (text.match(/\b(invoice|payment|reimbursement|expense|budget|finance|billing)\b/)) return 'Finance';
   if (text.match(/\b(office|facilities|parking|access card|badge)\b/)) return 'Admin';
@@ -51,7 +51,7 @@ const detectCategoryFromEmail = (subject, body) => {
 
 const isIgnoredEmail = (sender, subject) => {
   const ignoredDomains = ['google.com', 'linkedin.com', 'facebook.com', 'twitter.com', 'github.com', 'noreply', 'no-reply', 'mailer-daemon'];
-  const ignoredKeywords = ['delivered', 'delivery status', 'undeliverable', 'out of office', 'auto-reply', 'security alert', 'new login', 'verify your email', 'unsubscribe'];
+  const ignoredKeywords = ['delivered', 'delivery status', 'undeliverable', 'out of office', 'auto-reply', 'security alert', 'new login', 'verify your email', 'unsubscribe', '2-step verification', 'password changed', 'account recovery', 'verification code'];
   
   const senderLower = (sender || '').toLowerCase();
   const subjectLower = (subject || '').toLowerCase();
@@ -262,7 +262,14 @@ const pollImap = async () => {
       user: process.env.IMAP_USER,
       pass: process.env.IMAP_PASSWORD
     },
-    logger: false
+    logger: false,
+    connectionTimeout: 60000,
+    greetingTimeout: 60000,
+    socketTimeout: 60000
+  });
+
+  client.on('error', err => {
+    console.error('⚠️ IMAP Client Error:', err.message);
   });
 
   try {
@@ -316,17 +323,20 @@ const pollImap = async () => {
     await client.logout();
   } catch (err) {
     console.error('❌ IMAP Connection Error:', err.message);
-    if (client.active) await client.logout();
+    try {
+      if (client.usable) await client.logout();
+    } catch(e) {}
   }
 };
 
 const pollEmails = async () => {
-  const method = process.env.EMAIL_POLLING_METHOD || 'GMAIL';
+  let method = process.env.EMAIL_POLLING_METHOD || 'IMAP';
   
-  if (method === 'GMAIL') {
-    await pollGmail();
-  } else if (method === 'IMAP') {
+  // If method is SMTP but IMAP credentials exist, use IMAP for polling
+  if (method === 'SMTP' || method === 'IMAP') {
     await pollImap();
+  } else if (method === 'GMAIL') {
+    await pollGmail();
   }
 };
 
@@ -334,13 +344,15 @@ const startEmailPoller = () => {
   if (pollerInterval) return;
   
   // Run immediately
-  pollEmails();
+  pollEmails().catch(err => console.error('❌ Poller error (initial):', err.message));
   
   const interval = parseInt(process.env.EMAIL_POLL_INTERVAL) || 300000;
-  pollerInterval = setInterval(pollEmails, interval);
+  pollerInterval = setInterval(() => {
+    pollEmails().catch(err => console.error('❌ Poller error (interval):', err.message));
+  }, interval);
   
-  const method = process.env.EMAIL_POLLING_METHOD || 'GMAIL';
-  console.log(`📧 ${method} email poller running every ${interval / 60000} minutes`);
+  const method = process.env.EMAIL_POLLING_METHOD || 'IMAP';
+  console.log(`📧 Email poller running every ${interval / 60000} minute(s)`);
 };
 
 const stopEmailPoller = () => {

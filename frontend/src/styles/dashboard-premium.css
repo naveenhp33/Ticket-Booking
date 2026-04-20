@@ -192,9 +192,202 @@
   padding: 32px;
 }
 
+/* Stat cards grid — 4 cols on desktop */
+.dashboard-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+/* Split grid for charts side by side */
+.split-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+/* ── Large desktop (≤1280px) ── */
 @media (max-width: 1280px) {
   .premium-dashboard-grid {
     grid-template-columns: 1fr;
+    padding: 24px;
+  }
+}
+
+/* ── Tablet landscape (≤1024px) ── */
+@media (max-width: 1024px) {
+  .premium-dashboard-grid {
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .dashboard-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .split-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .premium-card {
+    padding: 20px;
+  }
+}
+
+/* ── Tablet portrait (≤768px) ── */
+@media (max-width: 768px) {
+  .premium-dashboard-grid {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .dashboard-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .split-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .premium-card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .premium-stat-card {
+    padding: 16px;
+  }
+
+  /* Shrink chart heights on tablet */
+  .chart-container-md {
+    height: 200px !important;
+  }
+
+  .chart-container-sm {
+    height: 160px !important;
+  }
+
+  /* Hero header stacks on tablet */
+  .dashboard-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px !important;
+  }
+
+  .dashboard-hero h1 {
+    font-size: 1.5rem !important;
+  }
+
+  /* Table: hide less important columns */
+  .premium-table .hide-tablet {
+    display: none;
+  }
+
+  .premium-table th,
+  .premium-table td {
+    padding: 12px 16px;
+  }
+
+  .premium-table-wrapper {
+    margin: 0 -16px;
+  }
+}
+
+/* ── Mobile (≤480px) ── */
+@media (max-width: 480px) {
+  .premium-dashboard-grid {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .dashboard-grid-4 {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .split-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .premium-card {
+    padding: 14px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+  }
+
+  .premium-stat-card {
+    padding: 14px;
+  }
+
+  .premium-stat-card h2 {
+    font-size: 1.4rem !important;
+  }
+
+  /* Chart heights on mobile */
+  .chart-container-md {
+    height: 180px !important;
+  }
+
+  .chart-container-sm {
+    height: 150px !important;
+  }
+
+  .chart-container-pie {
+    height: 160px !important;
+  }
+
+  /* Hero header on mobile */
+  .dashboard-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+
+  .dashboard-hero h1 {
+    font-size: 1.25rem !important;
+  }
+
+  .dashboard-hero p {
+    font-size: 0.8rem !important;
+  }
+
+  /* Table: hide date and action columns on mobile */
+  .premium-table .hide-mobile {
+    display: none;
+  }
+
+  .premium-table th,
+  .premium-table td {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+
+  .premium-table-wrapper {
+    margin: 0 -14px;
+  }
+
+  .ticket-id-tag {
+    font-size: 0.65rem;
+  }
+
+  .premium-card-title {
+    font-size: 0.95rem;
+  }
+
+  .premium-card-header {
+    margin-bottom: 16px;
+  }
+
+  /* Priority legend compact */
+  .priority-legend-item span {
+    font-size: 0.75rem;
   }
 }
 

@@ -89,7 +89,7 @@ const ticketSchema = new mongoose.Schema({
   // Status
   status: {
     type: String,
-    enum: ['open', 'assigned', 'in_progress', 'pending_info', 'resolved', 'closed', 'reopened'],
+    enum: ['open', 'assigned', 'in_progress', 'almost_complete', 'pending_info', 'resolved', 'closed', 'reopened'],
     default: 'open'
   },
 
@@ -103,6 +103,17 @@ const ticketSchema = new mongoose.Schema({
     type: String,
     enum: ['flexible', 'today', 'within_hour', 'right_now'],
     default: 'flexible'
+  },
+
+  // Work context
+  teamName: { type: String, trim: true },
+  shift: {
+    type: String,
+    enum: ['morning', 'afternoon', 'night'],
+  },
+  workLocation: {
+    type: String,
+    enum: ['office', 'remote'],
   },
 
   // Device/context fields (for IT tickets)
@@ -130,6 +141,7 @@ const ticketSchema = new mongoose.Schema({
   },
   assignedAt: Date,
   assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  firstResponseAt: Date,
   autoAssigned: { type: Boolean, default: false },
 
   // Employee contact preference

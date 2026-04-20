@@ -16,7 +16,12 @@ export const ticketService = {
   delete: (id) => api.delete(`/tickets/${id}`),
   createReassignRequest: (id, data) => api.post(`/tickets/${id}/reassign-request`, data),
   getReassignRequests: (params) => api.get('/tickets/reassign/requests', { params }),
-  processReassignRequest: (requestId, data) => api.patch(`/tickets/reassign/requests/${requestId}`, data)
+  processReassignRequest: (requestId, data) => api.patch(`/tickets/reassign/requests/${requestId}`, data),
+  updateTicket: (id, data) => api.patch(`/tickets/update-ticket/${id}`, data)
+};
+
+export const emailService = {
+  send: (data) => api.post('/email/send-email', data)
 };
 
 export const commentService = {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   BookOpen, 
   Search, 
@@ -31,18 +31,24 @@ const CATEGORY_MAP = {
 export default function KnowledgePage() {
   const { user } = useAuth();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [category, setCategory] = useState(searchParams.get('category') || '');
   
   const isAdminOrAgent = ['admin', 'support_agent'].includes(user?.role);
+  const qParam = searchParams.get('search');
 
   useEffect(() => {
-    fetchArticles();
-  }, [category]);
+    if (qParam !== null) {
+      setSearch(qParam);
+      handleSearch({ target: { value: qParam } });
+    } else {
+      fetchArticles();
+    }
+  }, [category, qParam]);
 
   const fetchArticles = async () => {
     setLoading(true);

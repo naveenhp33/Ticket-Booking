@@ -5,14 +5,15 @@
 
 // Knowledge-based keyword rules
 const KEYWORD_RULES = [
-  { keywords: ['server down', 'server crash', 'outage', 'production down', 'system failure', 'os crashed', 'blue screen', 'bsod'], bonus: 10, reason: 'Critical infrastructure or system failure keyword' },
-  { keywords: ['payment issue', 'payment failed', 'payroll', 'salary', 'financial loss'], bonus: 8, reason: 'Financial impact keyword' },
-  { keywords: ['data breach', 'security', 'hack', 'unauthorized', 'data loss'], bonus: 10, reason: 'Security risk keyword' },
-  { keywords: ['cannot login', 'locked out', 'access denied', 'vpn down', 'network down'], bonus: 7, reason: 'Access/connectivity keyword' },
-  { keywords: ['client meeting', 'client demo', 'presentation', 'deadline'], bonus: 6, reason: 'Business deadline keyword' },
-  { keywords: ['entire team', 'everyone affected', 'all users', 'department wide'], bonus: 8, reason: 'Wide impact keyword' },
-  { keywords: ['database', 'db down', 'backup failed', 'data corruption'], bonus: 9, reason: 'Data risk keyword' },
-  { keywords: ['printer', 'mouse', 'keyboard', 'monitor', 'cosmetic'], bonus: -3, reason: 'Low priority peripheral keyword' }
+  { keywords: ['server down', 'server crash', 'outage', 'production down', 'system failure', 'os crashed', 'blue screen', 'bsod', 'kernel panic', 'boot failure', 'crash', 'crashed'], bonus: 18, reason: 'Critical infrastructure or system failure keyword' },
+  { keywords: ['payment issue', 'payment failed', 'payroll', 'salary', 'financial loss', 'billing error'], bonus: 12, reason: 'Financial impact keyword' },
+  { keywords: ['data breach', 'security', 'hack', 'unauthorized', 'data loss', 'virus', 'ransomware', 'phishing'], bonus: 15, reason: 'Security risk keyword' },
+  { keywords: ['cannot login', 'locked out', 'access denied', 'vpn down', 'network down', 'network failure', 'no internet', 'wifi not working', 'internet failure', 'authentication', 'auth error', 'login issue'], bonus: 15, reason: 'Access/connectivity keyword' },
+  { keywords: ['client meeting', 'client demo', 'presentation', 'deadline', 'urgent', 'asap', 'immediately'], bonus: 8, reason: 'Business deadline/urgency keyword' },
+  { keywords: ['entire team', 'everyone affected', 'all users', 'department wide', 'whole office', 'global outage'], bonus: 15, reason: 'Wide impact keyword' },
+  { keywords: ['database', 'db down', 'backup failed', 'data corruption', 'sql error'], bonus: 12, reason: 'Data risk keyword' },
+  { keywords: ['display issue', 'screen flickering', 'no display', 'monitor issue', 'laptop display', 'broken screen', 'flickering'], bonus: 12, reason: 'Hardware/display keyword' },
+  { keywords: ['printer', 'mouse', 'keyboard', 'peripheral', 'cosmetic', 'minor', 'feature request'], bonus: -5, reason: 'Low priority or peripheral keyword' }
 ];
 
 // Impact weights
@@ -106,9 +107,9 @@ const analyzeKeywords = (text) => {
  * Determine priority label from score
  */
 const scoreToLabel = (score) => {
-  if (score >= 60) return 'critical';
-  if (score >= 35) return 'high';
-  if (score >= 15) return 'medium';
+  if (score >= 45) return 'critical';
+  if (score >= 25) return 'high';
+  if (score >= 12) return 'medium';
   return 'low';
 };
 

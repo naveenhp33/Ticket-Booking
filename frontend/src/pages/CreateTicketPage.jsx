@@ -15,11 +15,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useDebounce } from '../hooks/useDebounce';
 
 const DEPARTMENTS = ['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 'Sales', 'Legal'];
+const SHIFTS = [
+  { value: 'morning',   label: ' Morning Shift',   time: '9:00 AM – 1:00 PM' },
+  { value: 'afternoon', label: ' Afternoon Shift', time: '2:00 PM – 6:00 PM' },
+  { value: 'night',     label: ' Night Shift',     time: '6:00 PM – 6:00 AM' },
+];
 const PRIORITIES = [
-  { value: 'low', label: 'Low', color: '#10B981', desc: 'Non-critical issues, styling, etc.' },
-  { value: 'medium', label: 'Medium', color: '#4F46E5', desc: 'Standard functional issues.' },
-  { value: 'high', label: 'High', color: '#F59E0B', desc: 'Urgent issues affecting workflow.' },
-  { value: 'critical', label: 'Critical', color: '#EF4444', desc: 'System blockers needing immediate attention.' }
+  { value: 'low',      label: ' Low',      color: '#10B981', desc: 'Not urgent — can wait a few days.' },
+  { value: 'medium',   label: ' Medium',   color: '#4F46E5', desc: 'Needs attention but not blocking work.' },
+  { value: 'high',     label: ' High',     color: '#F59E0B', desc: 'Blocking my work — needs fixing today.' },
+  { value: 'critical', label: ' Critical', color: '#EF4444', desc: 'Everything is stopped — fix this right now!' },
 ];
 
 export default function CreateTicketPage() {
@@ -31,7 +36,10 @@ export default function CreateTicketPage() {
     description: '',
     department: '',
     priority: 'medium',
-    category: 'IT'
+    category: 'IT',
+    teamName: '',
+    shift: '',
+    workLocation: ''
   });
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState([]);
@@ -57,7 +65,7 @@ export default function CreateTicketPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title || !form.description || !form.department) {
-      return toast.error('Please fill required fields');
+      return toast.error('Please fill in all required fields');
     }
 
     setLoading(true);
@@ -81,14 +89,14 @@ export default function CreateTicketPage() {
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       className="page-layout"
-      style={{ maxWidth: '900px', margin: '0 auto' }}
+      style={{ maxWidth: '960px', margin: '0 auto' }}
     >
-      <div className="flex-between mb-8" style={{ marginBottom: 'var(--s-8)' }}>
+      <div className="flex-between mb-8" style={{ marginBottom: 'var(--s-6)' }}>
         <div className="flex-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ChevronLeft size={20} /></Button>
           <div>
-            <h1 style={{ fontSize: '1.5rem' }}>Raise New Ticket</h1>
-            <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Describe your issue and we'll route it to the right team.</p>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Report a Problem</h1>
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '2px' }}>Tell us what's wrong and we'll get the right team to help you.</p>
           </div>
         </div>
       </div>
@@ -96,11 +104,11 @@ export default function CreateTicketPage() {
       <div className="create-ticket-grid">
         <form onSubmit={handleSubmit} className="flex-col gap-6">
           <Card>
-            <div className="flex-col gap-6">
+            <div className="flex-col" style={{ gap: 'var(--s-5)', padding: 'var(--s-2)' }}>
               <div className="flex-col gap-1">
                 <Input 
-                  label="Subject / Title" 
-                  placeholder="Briefly describe the issue..."
+                  label="What's the problem? (Short title)" 
+                  placeholder="e.g. My laptop won't turn on, Can't access email..."
                   value={form.title}
                   onChange={e => setForm({...form, title: e.target.value})}
                   required
@@ -156,11 +164,11 @@ export default function CreateTicketPage() {
               </div>
 
               <div className="input-group">
-                <label className="input-label">Issue Details</label>
+                <label className="input-label">Describe the problem in detail <span style={{ color: 'var(--danger)' }}>*</span></label>
                 <textarea 
                   className="input" 
-                  style={{ height: '160px', paddingTop: '12px', resize: 'vertical' }}
-                  placeholder="Provide as much detail as possible. What happened? What were you doing?"
+                  style={{ height: '140px' }}
+                  placeholder="What happened? When did it start? What were you doing at the time?"
                   value={form.description}
                   onChange={e => setForm({...form, description: e.target.value})}
                   required
@@ -169,7 +177,7 @@ export default function CreateTicketPage() {
 
               <div className="form-grid-2">
                 <div className="input-group">
-                  <label className="input-label">Target Department</label>
+                  <label className="input-label">Which team should handle this? <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <select 
                     className="input"
                     value={form.department}
@@ -179,47 +187,71 @@ export default function CreateTicketPage() {
                     }}
                     required
                   >
-                    <option value="">Select Department</option>
+                    <option value="">Select a team</option>
                     {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label">Category</label>
-                  <select 
+                  <label className="input-label">Your Team Name</label>
+                  <input
                     className="input"
-                    value={form.category}
-                    onChange={e => setForm({...form, category: e.target.value})}
+                    placeholder="e.g. Sales North, Dev Team B"
+                    value={form.teamName}
+                    onChange={e => setForm({...form, teamName: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="form-grid-2">
+                <div className="input-group">
+                  <label className="input-label">Your Work Shift</label>
+                  <select
+                    className="input"
+                    value={form.shift}
+                    onChange={e => setForm({...form, shift: e.target.value})}
                   >
-                    <option value="IT">IT</option>
-                    <option value="HR">HR</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Operations">Operations</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Sales">Sales</option>
-                    <option value="Legal">Legal</option>
-                    <option value="Other">Other</option>
+                    <option value="">Select your shift</option>
+                    {SHIFTS.map(s => (
+                      <option key={s.value} value={s.value}>{s.label} ({s.time})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Where are you working from?</label>
+                  <select
+                    className="input"
+                    value={form.workLocation}
+                    onChange={e => setForm({...form, workLocation: e.target.value})}
+                  >
+                    <option value="">Select location</option>
+                    <option value="office">🏢 Office</option>
+                    <option value="remote">🏠 Working from Home (Remote)</option>
                   </select>
                 </div>
               </div>
 
               <div className="input-group">
-                <label className="input-label">Attachments</label>
+                <label className="input-label">Attach a screenshot or file <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>(optional)</span></label>
                 <div 
-                  className="flex-center flex-col gap-2"
                   style={{ 
                     border: '2px dashed var(--border)', 
                     borderRadius: 'var(--r-md)', 
-                    padding: 'var(--s-8)',
+                    padding: 'var(--s-6)',
                     cursor: 'pointer',
-                    background: 'var(--bg)'
+                    background: 'var(--bg)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'border-color var(--t-fast)'
                   }}
                   onClick={() => document.getElementById('file-upload').click()}
                 >
-                  <Paperclip size={24} color="var(--text-dim)" />
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Click to upload files</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>PDF, JPG, PNG (Max 5MB)</span>
+                  <Paperclip size={22} color="var(--text-dim)" />
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>Click to upload a file</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Screenshots, photos, PDFs (Max 5MB)</span>
                   <input 
                     id="file-upload" 
                     type="file" 
@@ -242,26 +274,28 @@ export default function CreateTicketPage() {
             </div>
           </Card>
 
-          <div className="flex-center gap-4" style={{ justifyContent: 'flex-end', marginTop: 'var(--s-4)' }}>
-            <Button variant="ghost" onClick={() => navigate(-1)}>Cancel</Button>
-            <Button size="lg" type="submit" isLoading={loading} rightIcon={<Send size={18} />}>Submit Request</Button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--s-3)', marginTop: 'var(--s-2)' }}>
+            <Button variant="ghost" onClick={() => navigate(-1)}>Go Back</Button>
+            <Button size="lg" type="submit" isLoading={loading} rightIcon={<Send size={18} />}>Send My Request</Button>
           </div>
         </form>
 
-        <div className="flex-col gap-6">
-          <Card title="Issue Priority">
-            <div className="flex-col gap-4">
+        <div className="flex-col gap-5">
+          <Card title="How urgent is this?">
+            <div className="flex-col" style={{ gap: 'var(--s-3)' }}>
               {PRIORITIES.map(p => (
                 <label 
-                  key={p.value} 
-                  className="flex-col gap-1" 
+                  key={p.value}
                   style={{ 
-                    padding: 'var(--s-3)', 
-                    border: `1px solid ${form.priority === p.value ? p.color : 'var(--border)'}`, 
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    padding: '10px 14px', 
+                    border: `2px solid ${form.priority === p.value ? p.color : 'var(--border)'}`, 
                     borderRadius: 'var(--r-md)', 
                     cursor: 'pointer',
-                    background: form.priority === p.value ? `${p.color}08` : 'transparent',
-                    transition: 'var(--t-fast)'
+                    background: form.priority === p.value ? `${p.color}10` : 'var(--bg)',
+                    transition: 'all var(--t-fast)'
                   }}
                 >
                   <input 
@@ -270,21 +304,22 @@ export default function CreateTicketPage() {
                     value={p.value} 
                     checked={form.priority === p.value}
                     onChange={e => setForm({...form, priority: e.target.value})}
-                    style={{ position: 'absolute', opacity: 0 }}
+                    style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
                   />
-                  <div className="flex-center gap-2" style={{ fontWeight: 700, color: p.color }}>
-                    <AlertTriangle size={14} /> {p.label}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.9rem', color: form.priority === p.value ? p.color : 'var(--text-main)' }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: p.color, flexShrink: 0, display: 'inline-block' }} />
+                    {p.label}
                   </div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', lineHeight: 1.4 }}>{p.desc}</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', lineHeight: 1.4, paddingLeft: '18px' }}>{p.desc}</p>
                 </label>
               ))}
             </div>
           </Card>
 
-          <Card title="Support Tip" style={{ background: '#EEF2FF' }}>
-            <div className="flex-center gap-3">
-              <Info size={20} color="var(--primary)" />
-              <p style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>Attaching screenshots of the error helps our team resolve issues 40% faster.</p>
+          <Card title="💡 Quick Tip" style={{ background: '#EEF2FF' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <Info size={18} color="var(--primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <p style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, lineHeight: 1.5 }}>Adding a screenshot helps our team fix your problem much faster!</p>
             </div>
           </Card>
         </div>

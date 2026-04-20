@@ -3,7 +3,7 @@ const router = express.Router();
 const {
   createTicket, getTickets, getTicket, updateStatus,
   assignTicket, reopenTicket, submitFeedback,
-  suggestPriority, findSimilarTickets, updatePriority, deleteTicket
+  suggestPriority, findSimilarTickets, updatePriority, deleteTicket, updateTicket
 } = require('../controllers/ticket.controller');
 const {
   createReassignRequest, getReassignRequests, processReassignRequest
@@ -27,6 +27,8 @@ router.patch('/:id/assign', protect, authorize('admin', 'support_agent'), assign
 router.patch('/:id/priority', protect, authorize('admin', 'support_agent'), updatePriority);
 router.patch('/:id/reopen', protect, reopenTicket);
 router.post('/:id/feedback', protect, submitFeedback);
+
+router.patch('/update-ticket/:id', protect, authorize('admin'), updateTicket);
 
 // Reassignment Request Routes
 router.post('/:id/reassign-request', protect, authorize('support_agent'), createReassignRequest);

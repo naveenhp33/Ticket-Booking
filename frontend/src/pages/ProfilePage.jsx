@@ -207,6 +207,52 @@ export default function ProfilePage() {
                  </Card>
                </motion.div>
              )}
+
+             {activeTab === 'notifications' && (
+               <motion.div key="notifications" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                 <Card title="Communication Preferences" subtitle="Manage how and when you receive updates about your tickets.">
+                    <div className="flex-col gap-6">
+                       {[
+                         { id: 'email', label: 'Email Notifications', desc: 'Receive status updates and replies via email.' },
+                         { id: 'inApp', label: 'In-App Alerts', desc: 'Show real-time toast notifications in the portal.' },
+                         { id: 'onAssign', label: 'Assignment Alerts', desc: 'Notify me when I am assigned to a ticket.' },
+                         { id: 'onComment', label: 'Comment Alerts', desc: 'Notify me when someone comments on my tickets.' }
+                       ].map(pref => (
+                         <div key={pref.id} className="flex-between" style={{ padding: '16px 20px', background: 'var(--surface-alt)', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                            <div className="flex-col">
+                               <span style={{ fontWeight: 800, color: 'var(--text-main)' }}>{pref.label}</span>
+                               <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{pref.desc}</span>
+                            </div>
+                            <div 
+                              onClick={async () => {
+                                const newPrefs = { 
+                                  ...user.notificationPreferences, 
+                                  [pref.id]: !user.notificationPreferences?.[pref.id] 
+                                };
+                                try {
+                                  const res = await userService.updateProfile({ notificationPreferences: newPrefs });
+                                  updateUser(res.data.user);
+                                  toast.success(`${pref.label} updated`);
+                                } catch (err) {
+                                  toast.error('Failed to update preference');
+                                }
+                              }}
+                              style={{ 
+                                width: '44px', height: '24px', 
+                                background: user.notificationPreferences?.[pref.id] ? 'var(--primary)' : 'var(--border)', 
+                                borderRadius: '20px', padding: '4px', cursor: 'pointer', display: 'flex', 
+                                justifyContent: user.notificationPreferences?.[pref.id] ? 'flex-end' : 'flex-start',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                               <motion.div layout style={{ width: '16px', height: '16px', background: 'white', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }} />
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                 </Card>
+               </motion.div>
+             )}
            </AnimatePresence>
         </div>
       </div>

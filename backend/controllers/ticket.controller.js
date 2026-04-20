@@ -10,7 +10,7 @@ const {
 } = require('../services/priority.service');
 const { autoAssignTicket, incrementWorkload, decrementWorkload } = require('../services/assignment.service');
 const { notifyTicketAssigned, notifyStatusChange, createNotification } = require('../services/notification.service');
-const { sendTicketConfirmation, sendStatusUpdate } = require('../services/email.service');
+const { sendTicketConfirmation, sendStatusUpdate, sendStatusChangeEmail, sendAckEmail } = require('../services/email.service');
 const { emitToUser, emitToRole, emitToTicket } = require('../config/socket');
 
 // @desc    Create ticket
@@ -104,11 +104,17 @@ const createTicket = async (req, res, next) => {
     // Send confirmation email
     sendTicketConfirmation({ to: req.user.email, name: req.user.name, ticket }).catch(() => {});
 
-    // Real-time: notify admins/agents
-    emitToRole('admin', 'ticket_created', { ticketId: ticket._id, ticket: ticket.ticketId, title: ticket.title, priority: ticket.priority });
-    emitToRole('support_agent', 'ticket_created', { ticketId: ticket._id, ticket: ticket.ticketId, title: ticket.title, priority: ticket.priority });
-
     await ticket.populate('createdBy assignedTo', 'name email department avatar');
+
+    // Real-time: notify admins/agents with the FULL ticket object
+    const socketPayload = { 
+        ticketId: ticket._id, 
+        ticket: ticket, 
+        title: ticket.title, 
+        priority: ticket.priority 
+    };
+    emitToRole('admin', 'ticket_created', socketPayload);
+    emitToRole('support_agent', 'ticket_created', socketPayload);
 
     res.status(201).json({
       success: true,
@@ -140,12 +146,20 @@ const getTickets = async (req, res, next) => {
     if (req.user.role === 'employee') {
       query.createdBy = req.user._id;
     } else if (req.user.role === 'support_agent') {
-      // Agents are strictly restricted to their own assigned tickets
-      query.assignedTo = req.user._id;
+      // Logic: If myTickets is true, show ONLY my assigned tickets.
+      // Otherwise, show my assignments OR unassigned items in my department.
+      if (myTickets === 'true') {
+        query.assignedTo = req.user._id;
+      } else {
+        query.$or = [
+          { assignedTo: req.user._id },
+          { assignedTo: null, category: req.user.department }
+        ];
+      }
     } else if (req.user.role === 'admin') {
-      // If the admin belongs to the "Admin" department, they see everything (Super Admin)
-      // Otherwise, they only see tickets for their specific department
-      if (req.user.department !== 'Admin') {
+      if (myTickets === 'true') {
+        query.assignedTo = req.user._id;
+      } else if (req.user.department !== 'Admin') {
         query.category = req.user.department;
       }
     }
@@ -240,6 +254,10 @@ const getTicket = async (req, res, next) => {
 const updateStatus = async (req, res, next) => {
   try {
     const { status, reason, estimatedResolutionTime, resolution } = req.body;
+    const validStatuses = ['open', 'assigned', 'in_progress', 'almost_complete', 'pending_info', 'resolved', 'closed', 'reopened'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
@@ -270,6 +288,16 @@ const updateStatus = async (req, res, next) => {
       ticket.sla.respondedAt = new Date();
     }
 
+    // AUTO-ACK: Send acknowledgment email when first status change occurs
+    if (['in_progress', 'assigned', 'almost_complete'].includes(status) && !ticket.firstResponseAt) {
+      ticket.firstResponseAt = new Date();
+      // Ensure createdBy is populated for email
+      const populated = await Ticket.findById(ticket._id).populate('createdBy', 'name email');
+      if (populated.createdBy?.email) {
+        sendAckEmail({ to: populated.createdBy.email, name: populated.createdBy.name, ticket: populated }).catch(() => {});
+      }
+    }
+
     await ticket.save();
     await ticket.populate('createdBy assignedTo', 'name email notificationPreferences');
 
@@ -277,17 +305,16 @@ const updateStatus = async (req, res, next) => {
     const affectedUsers = [ticket.createdBy._id, ticket.assignedTo?._id].filter(Boolean);
     await notifyStatusChange(ticket, status, req.user, affectedUsers);
 
-    // Email notification on resolve
-    if (status === 'resolved') {
-      sendStatusUpdate({ to: ticket.createdBy.email, name: ticket.createdBy.name, ticket, newStatus: status }).catch(() => {});
-    }
+    // Email worker on every status change
+    sendStatusChangeEmail({ to: ticket.createdBy.email, name: ticket.createdBy.name, ticket, newStatus: status }).catch(() => {});
 
     // Real-time
     emitToTicket(ticket._id.toString(), 'status_updated', {
       ticketId: ticket._id,
       status,
       changedBy: { name: req.user.name },
-      timestamp: new Date()
+      timestamp: new Date(),
+      firstResponseAt: ticket.firstResponseAt
     });
 
     // Broadcast to role rooms so list pages update in real-time
@@ -326,13 +353,23 @@ const assignTicket = async (req, res, next) => {
       ticket.status = 'assigned';
       ticket.statusHistory.push({ from: 'open', to: 'assigned', changedBy: req.user._id, reason: 'Manual assignment' });
     }
+
+    // AUTO-ACK: Send acknowledgment email when manually assigned
+    if (!ticket.firstResponseAt) {
+      ticket.firstResponseAt = new Date();
+      const populated = await Ticket.findById(ticket._id).populate('createdBy', 'name email');
+      if (populated.createdBy?.email) {
+        sendAckEmail({ to: populated.createdBy.email, name: populated.createdBy.name, ticket: populated }).catch(() => {});
+      }
+    }
     await ticket.save();
     await incrementWorkload(agentId);
     await notifyTicketAssigned(ticket, agent, req.user);
 
     emitToTicket(ticket._id.toString(), 'ticket_assigned', {
       ticketId: ticket._id,
-      assignedTo: { _id: agent._id, name: agent.name }
+      assignedTo: { _id: agent._id, name: agent.name },
+      firstResponseAt: ticket.firstResponseAt
     });
 
     // Broadcast to role rooms so list pages update in real-time
@@ -536,8 +573,36 @@ const deleteTicket = async (req, res, next) => {
   }
 };
 
+// @desc    Update ticket priority and/or status (admin only)
+// @route   PATCH /api/tickets/update-ticket/:id
+// @access  Private (admin)
+const updateTicket = async (req, res, next) => {
+  try {
+    const { priority, status } = req.body;
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (priority) ticket.priority = priority;
+
+    if (status) {
+      const oldStatus = ticket.status;
+      ticket.status = status;
+      ticket.statusHistory.push({ from: oldStatus, to: status, changedBy: req.user._id });
+
+      if (['resolved', 'closed'].includes(status)) {
+        ticket.updatedAt = new Date();
+      }
+    }
+
+    await ticket.save();
+    res.json({ success: true, message: 'Ticket updated', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createTicket, getTickets, getTicket, updateStatus,
   assignTicket, reopenTicket, submitFeedback,
-  suggestPriority, findSimilarTickets, updatePriority, deleteTicket
+  suggestPriority, findSimilarTickets, updatePriority, deleteTicket, updateTicket
 };

@@ -9,11 +9,19 @@ import {
   ChevronRight,
   ArrowUpDown,
   Calendar,
-  Clock
+  Clock,
+  MoreHorizontal,
+  Eye, 
+  Trash2, 
+  CheckSquare, 
+  AlertCircle,
+  ExternalLink,
+  Mail
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ticketService } from '../services/ticketService';
 import { useSocket } from '../context/SocketContext';
+import { useToast } from '../context/ToastContext';
 import { Button, Input, Card, Badge } from '../ui';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -33,13 +41,19 @@ export default function TicketsPage() {
     myTickets: searchParams.get('myTickets') || ''
   });
   
+  const [activeMenu, setActiveMenu] = useState(null); // ticketId of open menu
+  const toast = useToast();
   const { on } = useSocket();
 
   useEffect(() => {
     const offTicketCreated = on('ticket_created', (data) => {
       if (data.ticket && pagination.page === 1) {
         // Only prepend if we're on the first page
-        setTickets(prev => [data.ticket, ...prev].slice(0, 10));
+        setTickets(prev => {
+          if (prev.some(t => t._id === (data.ticket._id || data.ticketId))) return prev;
+          return [data.ticket, ...prev].slice(0, 10);
+        });
+        toast.info(`New Ticket: ${data.ticket.title || 'Support Request received'}`);
       }
     });
 
@@ -77,10 +91,15 @@ export default function TicketsPage() {
 
   const fetchTickets = () => {
     setLoading(true);
+    
+    // Default to active statuses if in "My Queue" and no status filter is applied
+    const activeStatuses = 'open,assigned,in_progress,almost_complete,reopened';
+    const statusFilter = filters.status || (filters.myTickets === 'true' ? activeStatuses : '');
+
     const params = {
       page: searchParams.get('page') || 1,
       limit: 10,
-      status: filters.status,
+      status: statusFilter,
       priority: filters.priority,
       search: filters.search,
       myTickets: filters.myTickets
@@ -99,8 +118,17 @@ export default function TicketsPage() {
   };
 
   useEffect(() => {
+    setFilters({
+      status: searchParams.get('status') || '',
+      priority: searchParams.get('priority') || '',
+      search: searchParams.get('search') || '',
+      myTickets: searchParams.get('myTickets') || ''
+    });
+  }, [searchParams]);
+
+  useEffect(() => {
     fetchTickets();
-  }, [searchParams, filters.myTickets]);
+  }, [filters]);
 
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };
@@ -113,6 +141,32 @@ export default function TicketsPage() {
     });
     setSearchParams(params);
   };
+
+  const handleAction = async (ticketId, action, e) => {
+    e.stopPropagation();
+    setActiveMenu(null);
+    try {
+      if (action === 'delete') {
+        if (window.confirm('Are you sure you want to delete this ticket?')) {
+          await ticketService.delete(ticketId);
+          toast.success('Ticket deleted successfully');
+          fetchTickets();
+        }
+      } else if (action === 'resolve') {
+        await ticketService.updateStatus(ticketId, { status: 'resolved' });
+        toast.success('Ticket marked as resolved');
+        fetchTickets();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Action failed');
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = () => setActiveMenu(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
 
   return (
     <motion.div 
@@ -133,57 +187,86 @@ export default function TicketsPage() {
         </div>
       </div>
 
-      <div className="flex-between gap-4 mb-8" style={{ background: 'white', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <div className="flex-center gap-4 flex-1">
-          <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+      <div style={{ 
+        background: 'white', 
+        padding: '16px 24px', 
+        borderRadius: '20px', 
+        border: '1px solid var(--border-light)', 
+        boxShadow: 'var(--shadow-sm)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '24px',
+        marginBottom: '24px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1 }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
             <input 
-              placeholder="Filter results..." 
-              className="input" 
-              style={{ paddingLeft: '36px', background: 'var(--bg)', border: '1px solid transparent', height: '36px', fontSize: '0.85rem' }}
+              type="text" 
+              placeholder="Search by ID, subject or content..." 
+              style={{ 
+                width: '100%', padding: '10px 16px 10px 42px', 
+                borderRadius: '12px', border: '1px solid var(--border)', 
+                background: 'var(--surface-alt)', fontSize: '0.9rem',
+                fontWeight: 600, outline: 'none', transition: 'all 0.2s ease',
+                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+              }}
               value={filters.search}
               onChange={e => handleFilterChange('search', e.target.value)}
             />
           </div>
-          
-          <div className="flex-center gap-2">
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Status</span>
-            <select 
-              className="input" 
-              style={{ width: '110px', height: '32px', fontSize: '0.8rem', background: 'var(--bg)', border: '1px solid transparent', padding: '0 8px' }}
-              value={filters.status}
-              onChange={e => handleFilterChange('status', e.target.value)}
-            >
-              <option value="">All</option>
-              <option value="open">Open</option>
-              <option value="in_progress">In Progress</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
-            </select>
-          </div>
 
-          <div className="flex-center gap-2">
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Priority</span>
-            <select 
-              className="input" 
-              style={{ width: '110px', height: '32px', fontSize: '0.8rem', background: 'var(--bg)', border: '1px solid transparent', padding: '0 8px' }}
-              value={filters.priority}
-              onChange={e => handleFilterChange('priority', e.target.value)}
-            >
-              <option value="">All</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+          <div style={{ height: '24px', width: '1px', background: 'var(--border-light)' }} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</span>
+              <select 
+                style={{ 
+                  padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border)', 
+                  background: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
+                  minWidth: '130px', outline: 'none'
+                }}
+                value={filters.status}
+                onChange={e => handleFilterChange('status', e.target.value)}
+              >
+                <option value="">{filters.myTickets === 'true' ? 'All Active' : 'All Statuses'}</option>
+                <option value="open">Open</option>
+                <option value="assigned">Assigned</option>
+                <option value="in_progress">Working on it</option>
+                <option value="almost_complete">Almost done</option>
+                <option value="resolved">Fixed</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Priority</span>
+              <select 
+                style={{ 
+                  padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border)', 
+                  background: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
+                  minWidth: '100px', outline: 'none'
+                }}
+                value={filters.priority}
+                onChange={e => handleFilterChange('priority', e.target.value)}
+              >
+                <option value="">All</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div className="flex-center gap-2">
-            <Button variant="ghost" size="sm" style={{ height: '32px', minWidth: 'unset' }} leftIcon={<Filter size={14} />}>Filters</Button>
-            {user?.role === 'employee' && (
-              <Button variant="outline" size="sm" style={{ height: '32px', minWidth: 'unset' }} onClick={() => navigate('/tickets/new')} leftIcon={<Plus size={14} />}>New</Button>
-            )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+           <Button variant="ghost" size="sm" style={{ fontWeight: 800, padding: '8px 16px' }} leftIcon={<Filter size={16} />}>More Filters</Button>
+           {user?.role === 'employee' && (
+             <Button variant="primary" size="sm" style={{ fontWeight: 800, padding: '8px 20px', borderRadius: '12px' }} onClick={() => navigate('/tickets/new')} leftIcon={<Plus size={18} />}>New Ticket</Button>
+           )}
         </div>
       </div>
 
@@ -225,7 +308,10 @@ export default function TicketsPage() {
                   className="dashboard-row"
                 >
                   <td style={{ padding: '16px' }}>
-                    <span className="ticket-id-tag">#{t.ticketId || t._id.slice(-6).toUpperCase()}</span>
+                    <div className="flex-center gap-2">
+                       <span className="ticket-id-tag">#{t.ticketId || t._id.slice(-6).toUpperCase()}</span>
+                       {t.emailSource && <Mail size={14} style={{ color: 'var(--primary)' }} title="From Email" />}
+                    </div>
                   </td>
                   <td style={{ padding: '16px' }}>
                     <div className="flex-col gap-1">
@@ -263,7 +349,50 @@ export default function TicketsPage() {
                       {new Date(t.updatedAt).toLocaleDateString()}
                     </div>
                   </td>
-                  <td><button className="row-action-btn"><MoreVertical size={16} /></button></td>
+                  <td style={{ textAlign: 'right', paddingRight: '20px' }}>
+                    <button 
+                      className="row-action-btn"
+                      style={{ marginLeft: 'auto' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenu(activeMenu === t._id ? null : t._id);
+                      }}
+                      title="Ticket Options"
+                    >
+                      <MoreHorizontal size={20} strokeWidth={2.2} />
+                    </button>
+                    
+                    <AnimatePresence mode="wait">
+                      {activeMenu === t._id && (
+                        <motion.div 
+                          key="dropdown"
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                          className="dropdown-menu"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <div className="menu-item" onClick={() => navigate(`/tickets/${t._id}`)}>
+                            <Eye size={14} /> View Details
+                          </div>
+                          {['admin', 'support_agent'].includes(user?.role) && t.status !== 'resolved' && (
+                            <div className="menu-item" onClick={(e) => handleAction(t._id, 'resolve', e)}>
+                              <CheckSquare size={14} /> Mark Resolved
+                            </div>
+                          )}
+                          {user?.role === 'admin' && (
+                            <div className="menu-item danger" onClick={(e) => handleAction(t._id, 'delete', e)}>
+                              <Trash2 size={14} /> Delete Ticket
+                            </div>
+                          )}
+                          <div className="menu-divider" />
+                          <div className="menu-item disabled" style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                             Updated {new Date(t.updatedAt).toLocaleDateString()}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </td>
                 </motion.tr>
               ))}
             </AnimatePresence>
@@ -311,7 +440,7 @@ export default function TicketsPage() {
           font-size: 0.8rem;
           background: var(--primary-light);
           padding: 6px 10px;
-          borderRadius: 8px;
+          border-radius: 8px;
         }
         .ticket-subject {
           font-weight: 700;
@@ -358,6 +487,48 @@ export default function TicketsPage() {
         .row-action-btn:hover {
           background: #F1F5F9;
           color: var(--text-dark);
+        }
+        .dropdown-menu {
+          position: absolute;
+          right: 48px;
+          top: -10px;
+          z-index: 100;
+          min-width: 170px;
+          background: white;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 6px;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+          backdrop-filter: blur(10px);
+        }
+        .menu-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          font-size: 0.825rem;
+          font-weight: 600;
+          color: var(--text-main);
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .menu-item:hover {
+          background: var(--primary-light);
+          color: var(--primary);
+        }
+        .menu-item.danger:hover {
+          background: #FEF2F2;
+          color: #DC2626;
+        }
+        .menu-divider {
+          height: 1px;
+          background: #F1F5F9;
+          margin: 6px 8px;
+        }
+        .menu-item.disabled {
+          cursor: default;
+          pointer-events: none;
         }
         @keyframes pulse {
           0% { opacity: 1; }

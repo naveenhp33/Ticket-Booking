@@ -142,4 +142,114 @@ const sendStatusUpdate = async ({ to, name, ticket, newStatus }) => {
   }
 };
 
-module.exports = { sendTicketConfirmation, sendStatusUpdate };
+const sendAckEmail = async ({ to, name, ticket }) => {
+  try {
+    const transport = await getTransporter();
+    if (!transport) return;
+
+    await transport.sendMail({
+      from: `"IT Support" <${process.env.FROM_EMAIL || process.env.SUPPORT_EMAIL}>`,
+      to,
+      subject: `[${ticket.ticketId}] We've received your request`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #1a1a2e; color: white; padding: 20px 30px; border-radius: 8px 8px 0 0;">
+            <h2 style="margin: 0;">✅ Request Acknowledged</h2>
+          </div>
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef;">
+            <p>Hi <strong>${name}</strong>,</p>
+            <p>We have received your support request and our team is now working on it.</p>
+            <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 20px; margin: 20px 0;">
+              <p style="margin: 0 0 8px;"><strong>Ticket ID:</strong> ${ticket.ticketId}</p>
+              <p style="margin: 0 0 8px;"><strong>Title:</strong> ${ticket.title}</p>
+              <p style="margin: 0;"><strong>Priority:</strong> ${ticket.priority.toUpperCase()}</p>
+            </div>
+            <p style="color: #6c757d; font-size: 13px; margin-top: 30px;">This is an automated message. Please do not reply to this email.</p>
+          </div>
+        </div>
+      `
+    });
+    console.log(`📧 Ack email sent to ${to}`);
+  } catch (err) {
+    console.error('❌ Ack email error:', err.message);
+  }
+};
+
+const sendResolveEmail = async ({ to, name, ticket }) => {
+  try {
+    const transport = await getTransporter();
+    if (!transport) return;
+
+    await transport.sendMail({
+      from: `"IT Support" <${process.env.FROM_EMAIL || process.env.SUPPORT_EMAIL}>`,
+      to,
+      subject: `[${ticket.ticketId}] Your request has been resolved`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #198754; color: white; padding: 20px 30px; border-radius: 8px 8px 0 0;">
+            <h2 style="margin: 0;">🎉 Ticket Resolved</h2>
+          </div>
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef;">
+            <p>Hi <strong>${name}</strong>,</p>
+            <p>Great news! Your support ticket has been resolved.</p>
+            <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 20px; margin: 20px 0;">
+              <p style="margin: 0 0 8px;"><strong>Ticket ID:</strong> ${ticket.ticketId}</p>
+              <p style="margin: 0;"><strong>Title:</strong> ${ticket.title}</p>
+            </div>
+            <p>Please log in to the portal to confirm resolution or reopen if the issue persists.</p>
+            <p style="color: #6c757d; font-size: 13px; margin-top: 30px;">This is an automated message. Please do not reply to this email.</p>
+          </div>
+        </div>
+      `
+    });
+    console.log(`📧 Resolve email sent to ${to}`);
+  } catch (err) {
+    console.error('❌ Resolve email error:', err.message);
+  }
+};
+
+const sendStatusChangeEmail = async ({ to, name, ticket, newStatus }) => {
+  try {
+    const transport = await getTransporter();
+    if (!transport) return;
+
+    const statusMap = {
+      in_progress:     { label: '🔧 We are working on it',   color: '#2563EB', message: 'Good news! Our team has started working on your problem. We will keep you updated.' },
+      almost_complete: { label: '🏁 Almost done!',           color: '#7C3AED', message: 'We are almost finished fixing your issue. It should be resolved very soon.' },
+      resolved:        { label: '✅ Your problem is fixed!', color: '#059669', message: 'Great news! Your issue has been fully resolved. Please log in to confirm or let us know if it is still happening.' },
+      pending_info:    { label: '❓ We need more info',      color: '#D97706', message: 'We need a bit more information from you to continue. Please check your ticket and reply.' },
+      closed:          { label: '🔒 Ticket closed',          color: '#64748B', message: 'Your ticket has been closed. If the problem comes back, you can always open a new one.' },
+    };
+
+    const s = statusMap[newStatus] || { label: `Update on your ticket`, color: '#1a1a2e', message: 'Your ticket status has been updated.' };
+
+    await transport.sendMail({
+      from: `"IT Support" <${process.env.FROM_EMAIL || process.env.SUPPORT_EMAIL}>`,
+      to,
+      subject: `[${ticket.ticketId}] ${s.label}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: ${s.color}; color: white; padding: 20px 30px; border-radius: 8px 8px 0 0;">
+            <h2 style="margin: 0;">${s.label}</h2>
+          </div>
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef;">
+            <p>Hi <strong>${name}</strong>,</p>
+            <p>${s.message}</p>
+            <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 20px; margin: 20px 0;">
+              <p style="margin: 0 0 8px;"><strong>Ticket ID:</strong> ${ticket.ticketId}</p>
+              <p style="margin: 0 0 8px;"><strong>Problem:</strong> ${ticket.title}</p>
+              <p style="margin: 0;"><strong>Current Status:</strong> ${s.label}</p>
+            </div>
+            <p>You can check your ticket anytime by logging into the support portal.</p>
+            <p style="color: #6c757d; font-size: 13px; margin-top: 30px;">This is an automatic update. Please do not reply to this email.</p>
+          </div>
+        </div>
+      `
+    });
+    console.log(`📧 Status change email (${newStatus}) sent to ${to}`);
+  } catch (err) {
+    console.error('❌ Status change email error:', err.message);
+  }
+};
+
+module.exports = { sendTicketConfirmation, sendStatusUpdate, sendAckEmail, sendResolveEmail, sendStatusChangeEmail };

@@ -11,15 +11,26 @@ import {
   CheckCircle2, 
   History, 
   MoreVertical,
+  RefreshCw,
+  BadgeCheck,
+  Mail, 
+  UserCheck, 
+  Hammer, 
+  Sparkles, 
+  Trophy,
+  Plus,
+  Activity,
+  ShieldCheck,
+  Briefcase,
   Send,
   Lock,
   Star,
-  RefreshCw
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useToast } from '../context/ToastContext';
-import { ticketService, commentService, userService } from '../services/ticketService';
+import { ticketService, commentService, userService, emailService } from '../services/ticketService';
 import { timeAgo, formatDateTime, getInitials, getAvatarColor } from '../utils/helpers';
 import { Button, Card, Badge, Input } from '../ui';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -46,6 +57,10 @@ export default function TicketDetailPage() {
   const [reassignReason, setReassignReason] = useState('');
   const [submittingReassign, setSubmittingReassign] = useState(false);
   const [isInternal, setIsInternal] = useState(false);
+  const [ackSent, setAckSent] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [ackTimer, setAckTimer] = useState(null); // seconds remaining for 15-min ack
+  const timerRef = useRef(null);
 
   const isAdmin = user?.role === 'admin';
   const isAgent = user?.role === 'support_agent';
@@ -54,15 +69,29 @@ export default function TicketDetailPage() {
   useEffect(() => {
     fetchTicket();
     fetchComments();
-    if (isAdminOrAgent) {
-      fetchAgents();
-    }
-    // Join the ticket's socket room for real-time updates
+    if (isAdminOrAgent) fetchAgents();
     if (id) joinTicket(id);
     return () => {
       if (id) leaveTicket(id);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [id, user]);
+
+  // 15-min ack countdown (admin only, open tickets)
+  useEffect(() => {
+    if (!ticket || !isAdmin) return;
+    if (['resolved', 'closed'].includes(ticket.status)) return;
+    if (ticket.firstResponseAt) { setAckSent(true); return; }
+
+    const createdAt = new Date(ticket.createdAt).getTime();
+    const ACK_LIMIT = 15 * 60; // 15 minutes
+
+    const tick = () => setAckTimer(Math.max(0, ACK_LIMIT - Math.floor((Date.now() - createdAt) / 1000)));
+    tick();
+    timerRef.current = setInterval(tick, 1000);
+    return () => clearInterval(timerRef.current);
+  }, [ticket?._id, ticket?.status, isAdmin]);
+
 
   // Real-time socket listeners for this ticket
   useEffect(() => {
@@ -73,6 +102,7 @@ export default function TicketDetailPage() {
         setTicket(prev => prev ? {
           ...prev,
           status: data.status,
+          firstResponseAt: data.firstResponseAt || prev.firstResponseAt,
           statusHistory: [...(prev.statusHistory || []), {
             from: prev.status,
             to: data.status,
@@ -88,6 +118,7 @@ export default function TicketDetailPage() {
         setTicket(prev => prev ? {
           ...prev,
           assignedTo: data.assignedTo,
+          firstResponseAt: data.firstResponseAt || prev.firstResponseAt,
           status: prev.status === 'open' ? 'assigned' : prev.status
         } : prev);
       }
@@ -211,6 +242,29 @@ export default function TicketDetailPage() {
   };
 
   const [isResolving, setIsResolving] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  const STATUS_OPTIONS = [
+    { value: 'in_progress',     label: ' Working on it',  color: '#2563EB' },
+    { value: 'almost_complete', label: ' Almost done',    color: '#7C3AED' },
+    { value: 'resolved',        label: ' Fixed / Resolved', color: '#059669' },
+  ];
+
+  const handleStatusChange = async (newStatus) => {
+    setUpdatingStatus(true);
+    try {
+      await ticketService.updateStatus(id, {
+        status: newStatus,
+        resolution: newStatus === 'resolved' ? { notes: 'Issue resolved by admin.' } : undefined
+      });
+      toast.success('Status updated — worker will be notified by email!');
+      fetchTicket();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update status');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   const handleResolve = async () => {
     setIsResolving(true);
@@ -226,6 +280,28 @@ export default function TicketDetailPage() {
     } finally {
       setIsResolving(false);
     }
+  };
+
+
+  const handleSendEmail = async (type) => {
+    setSendingEmail(true);
+    try {
+      await emailService.send({ ticketId: ticket._id, type });
+      toast.success('"We received it" email sent to worker!');
+      setAckSent(true);
+      fetchTicket();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send email');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const formatTime = (secs) => {
+    if (secs === null) return '--:--';
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   };
 
   const handleReassignRequest = async () => {
@@ -248,7 +324,19 @@ export default function TicketDetailPage() {
   if (loading) return <div>Loading...</div>;
   if (!ticket) return null;
 
+  const isTicketOpen = !['resolved', 'closed'].includes(ticket.status);
+  const ackOverdue = ackTimer === 0 && !ackSent;
 
+  // Status progress config for worker banner
+  const STATUS_PROGRESS = [
+    { value: 'open',             label: 'Received',        icon: <Mail size={16} /> },
+    { value: 'assigned',         label: 'Assigned',        icon: <UserCheck size={16} /> },
+    { value: 'in_progress',      label: 'Working on it',   icon: <Hammer size={16} /> },
+    { value: 'almost_complete',  label: 'Almost done',     icon: <Sparkles size={16} /> },
+    { value: 'resolved',         label: 'Fixed!',          icon: <Trophy size={16} /> },
+  ];
+  const currentStep = STATUS_PROGRESS.findIndex(s => s.value === ticket.status);
+  const progressPct = currentStep < 0 ? 0 : Math.round((currentStep / (STATUS_PROGRESS.length - 1)) * 100);
 
   return (
     <motion.div 
@@ -256,34 +344,252 @@ export default function TicketDetailPage() {
       animate={{ opacity: 1 }}
       className="page-layout"
     >
-      <div className="flex-between mb-8" style={{ marginBottom: 'var(--s-8)' }}>
-        <div className="flex-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/tickets')}><ArrowLeft size={20} /></Button>
-          <div className="flex-col">
-            <div className="flex-center gap-2 mb-1">
-              <span style={{ color: 'var(--text-dim)', fontWeight: 600, fontSize: '0.8rem' }}>#{ticket.ticketId || ticket._id.slice(-6).toUpperCase()}</span>
-              <Badge variant={ticket.status === 'open' ? 'primary' : 'success'}>{ticket.status}</Badge>
+      {/* Ack Banner — Admin only: 15-min reply deadline */}
+      {isAdmin && isTicketOpen && ackTimer !== null && !ackSent && (
+        <div style={{
+          marginBottom: 'var(--s-6)', padding: '14px 20px', borderRadius: 'var(--r-md)',
+          background: ackOverdue ? '#FEF2F2' : ackTimer < 300 ? '#FFFBEB' : '#F0FDF4',
+          border: `1px solid ${ackOverdue ? '#FCA5A5' : ackTimer < 300 ? '#FCD34D' : '#86EFAC'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Clock size={20} color={ackOverdue ? '#DC2626' : ackTimer < 300 ? '#D97706' : '#16A34A'} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.875rem', color: ackOverdue ? '#DC2626' : ackTimer < 300 ? '#D97706' : '#15803D' }}>
+                {ackOverdue
+                  ? '⚠️ Reply overdue — worker has been waiting over 15 minutes!'
+                  : ackTimer < 300
+                  ? ' Less than 5 minutes left — send a reply soon!'
+                  : ' Reply within 15 minutes to let the worker know you received their request'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                Time to reply: <strong style={{ color: ackOverdue ? '#DC2626' : 'inherit', fontVariantNumeric: 'tabular-nums' }}>
+                  {ackOverdue ? 'Overdue' : formatTime(ackTimer)}
+                </strong>
+                &nbsp;·&nbsp; Fixing the issue may take hours or days — that's okay.
+              </div>
             </div>
-            <h1 style={{ fontSize: '1.5rem' }}>{ticket.title}</h1>
+          </div>
+          <button
+            onClick={() => handleSendEmail('ack')}
+            disabled={sendingEmail}
+            style={{
+              padding: '8px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+              background: ackOverdue ? '#DC2626' : '#2563EB', color: 'white',
+              fontWeight: 700, fontSize: '0.82rem', opacity: sendingEmail ? 0.6 : 1,
+              whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px'
+            }}
+          >
+            <CheckCircle2 size={16} />
+            {sendingEmail ? 'Sending...' : 'Send "We got your request" Email'}
+          </button>
+        </div>
+      )}
+
+      {ackSent && isAdmin && isTicketOpen && (
+        <div style={{ marginBottom: 'var(--s-4)', padding: '10px 16px', borderRadius: 'var(--r-md)', background: '#F0FDF4', border: '1px solid #86EFAC', fontSize: '0.82rem', color: '#15803D', fontWeight: 600 }}>
+           Reply sent — worker knows you received their request. Fix it whenever it's ready.
+        </div>
+      )}
+
+      {/* Worker: live status progress bar (PREMIUM UPGRADE) */}
+      {!isAdminOrAgent && (
+        <Card style={{ marginBottom: 'var(--s-6)', padding: '24px 32px', border: '1px solid var(--border-light)', boxShadow: '0 4px 20px -5px rgba(0,0,0,0.05)', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <div>
+              <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-main)', display: 'block' }}>Real-time Request Journey</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Track every step of your support experience</span>
+            </div>
+            <div style={{ padding: '4px 12px', background: 'var(--bg)', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
+              {ticket.status.replace('_', ' ').toUpperCase()}
+            </div>
+          </div>
+
+          <div style={{ position: 'relative', padding: '10px 0 20px 0' }}>
+            {/* Background Track */}
+            <div style={{ position: 'absolute', top: '26px', left: '20px', right: '20px', height: '4px', background: '#F1F5F9', borderRadius: '4px' }} />
+            
+            {/* Active Progress Track with Glow */}
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `calc(${progressPct}% - 40px)` }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              style={{ 
+                position: 'absolute', top: '26px', left: '20px', height: '4px', 
+                background: 'linear-gradient(90deg, #3B82F6 0%, #2DD4BF 100%)', 
+                borderRadius: '4px', zIndex: 1,
+                boxShadow: '0 0 12px rgba(59, 130, 246, 0.5)'
+              }} 
+            />
+
+            {/* Step Indicators */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
+              {STATUS_PROGRESS.map((s, i) => {
+                const isCompleted = i < currentStep;
+                const isActive = i === currentStep;
+                const isFuture = i > currentStep;
+
+                return (
+                  <div key={s.value} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', width: '80px' }}>
+                    <motion.div
+                      whileHover={{ scale: 1.1 }}
+                      style={{
+                        width: '36px', height: '36px', borderRadius: '12px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: isActive ? 'white' : isCompleted ? '#3B82F6' : 'white',
+                        color: isActive ? '#3B82F6' : isCompleted ? 'white' : '#94A3B8',
+                        border: isActive ? '2px solid #3B82F6' : isCompleted ? 'none' : '1px solid #E2E8F0',
+                        boxShadow: isActive ? '0 0 20px rgba(59, 130, 246, 0.25)' : 'none',
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
+                      {isCompleted ? <BadgeCheck size={20} /> : s.icon}
+                    </motion.div>
+                    <span style={{ 
+                      fontSize: '0.65rem', fontWeight: isActive ? 800 : 600, 
+                      color: isActive ? 'var(--primary)' : isFuture ? 'var(--text-dim)' : 'var(--text-main)',
+                      textAlign: 'center', whiteSpace: 'nowrap'
+                    }}>
+                      {s.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Ticket Command Center — Optimized State Controller */}
+      {(isAdmin || isAgent) && isTicketOpen && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ 
+            marginBottom: 'var(--s-10)', border: '1px solid var(--border-light)', 
+            padding: '12px 16px', display: 'flex', alignItems: 'center', 
+            justifyContent: 'space-between', gap: '20px',
+            background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(20px)',
+            boxShadow: '0 20px 40px -15px rgba(0,0,0,0.05)', borderRadius: '24px',
+            position: 'relative', zIndex: 10
+          }}
+        >
+          {/* Header Section */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingLeft: '8px' }}>
+             <div style={{ 
+               width: '44px', height: '44px', background: 'var(--primary)', 
+               borderRadius: '16px', display: 'flex', alignItems: 'center', 
+               justifyContent: 'center', color: 'white', position: 'relative'
+             }}>
+               <Activity size={22} strokeWidth={2.5} />
+               <div style={{ position: 'absolute', top: '-4px', right: '-4px', width: '12px', height: '12px', background: '#10B981', borderRadius: '50%', border: '2px solid white', animation: 'pulse 2s infinite' }} />
+             </div>
+             <div>
+               <h4 style={{ fontWeight: 900, fontSize: '0.95rem', color: 'var(--text-main)', margin: 0, letterSpacing: '-0.01em' }}>Ticket Management</h4>
+               <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: 0, fontWeight: 600 }}>Update state & notify requester</p>
+             </div>
+          </div>
+
+          {/* Segmented Control with Sliding Highlight */}
+          <div style={{ 
+            display: 'flex', background: '#F1F5F9', padding: '6px', 
+            borderRadius: '18px', border: '1px solid var(--border)', position: 'relative', gap: '6px'
+          }}>
+            {STATUS_OPTIONS.map(opt => {
+              const isActive = ticket.status === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => handleStatusChange(opt.value)}
+                  disabled={updatingStatus || isActive}
+                  style={{
+                    padding: '10px 24px', borderRadius: '14px', border: 'none',
+                    background: isActive ? 'white' : 'transparent',
+                    color: isActive ? 'var(--text-main)' : 'var(--text-dim)',
+                    fontWeight: 800, fontSize: '0.875rem', cursor: isActive ? 'default' : 'pointer',
+                    boxShadow: isActive ? '0 10px 15px -3px rgba(0,0,0,0.04)' : 'none',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    position: 'relative', zIndex: 1
+                  }}
+                >
+                  <div style={{ 
+                    width: '8px', height: '8px', borderRadius: '50%', 
+                    background: opt.color, boxShadow: isActive ? `0 0 8px ${opt.color}` : 'none' 
+                  }} />
+                  {opt.label.replace('Set ', '')}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Extra Action */}
+          <div style={{ paddingRight: '8px' }}>
+             <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg)', padding: '8px 16px', borderRadius: '12px' }}>
+                <Clock size={14} /> <span>Live for {timeAgo(ticket.updatedAt)}</span>
+             </div>
+          </div>
+
+          <style>{`
+            @keyframes pulse {
+              0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+              70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+              100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+            }
+          `}</style>
+        </motion.div>
+      )}
+
+      <div className="flex-between" style={{ marginBottom: '40px', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+          <button 
+            onClick={() => navigate('/tickets')}
+            style={{ 
+              marginTop: '8px', width: '40px', height: '40px', borderRadius: '12px', 
+              border: '1px solid var(--border)', background: 'white', 
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: 'var(--text-dim)', transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-dim)'; }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          
+          <div className="flex-col" style={{ gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ 
+                fontSize: '0.72rem', fontWeight: 950, color: 'var(--text-dim)', 
+                letterSpacing: '1.2px', background: 'var(--border-light)', 
+                padding: '4px 10px', borderRadius: '6px', 
+                border: '1px solid var(--border)', display: 'inline-flex',
+                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+              }}>
+                #{ticket.ticketId || ticket._id.slice(-6).toUpperCase()}
+              </span>
+              <Badge variant={
+                ticket.status === 'open' ? 'info' : 
+                ticket.status === 'resolved' ? 'success' : 
+                ticket.status === 'assigned' ? 'primary' : 
+                'warning'
+              } style={{ height: '24px', display: 'flex', alignItems: 'center' }}>
+                {ticket.status.replace('_', ' ').toUpperCase()}
+              </Badge>
+            </div>
+            <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--text-main)', margin: 0, lineHeight: 0.9 }}>{ticket.title}</h1>
           </div>
         </div>
+
         <div className="flex-center gap-3">
-          <Button variant="outline" leftIcon={<History size={18} />}>History</Button>
-          {isAssignedAgent && ticket.status !== 'resolved' && (
-            <Button 
-                variant="outline" 
-                leftIcon={<RefreshCw size={18} />}
-                onClick={() => setIsReassignModalOpen(true)}
-            >
-                Request Reassignment
-            </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={() => navigate('/tickets')} leftIcon={<History size={16} />}>History</Button>
           {(isAdmin || (isAgent && isAssignedAgent)) && (
             <Button 
-              leftIcon={<CheckCircle2 size={18} />} 
+              size="md"
+              leftIcon={<CheckCircle2 size={20} />} 
               onClick={handleResolve} 
               disabled={ticket.status === 'resolved'}
               isLoading={isResolving}
+              style={{ padding: '0 24px', borderRadius: '14px', fontWeight: 800, fontSize: '0.95rem', boxShadow: '0 8px 20px -6px rgba(30, 64, 175, 0.4)' }}
             >
               Resolve Ticket
             </Button>
@@ -291,7 +597,7 @@ export default function TicketDetailPage() {
         </div>
       </div>
 
-      <div className="create-ticket-grid">
+      <div className="ticket-detail-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '32px', alignItems: 'start' }}>
         <div className="flex-col gap-6">
           {/* Main Content */}
           <Card>
@@ -330,7 +636,7 @@ export default function TicketDetailPage() {
           {/* Discussion */}
           <div className="flex-col gap-4">
              <div className="flex-center gap-2" style={{ fontWeight: 700, paddingLeft: 'var(--s-2)' }}>
-               <MessageSquare size={18} /> Discussion Thread
+               <MessageSquare size={18} /> Messages & Replies
              </div>
 
              <div className="flex-col gap-4">
@@ -342,7 +648,7 @@ export default function TicketDetailPage() {
                          {getInitials(comment.author?.name)}
                        </div>
                        <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>{comment.author?.name}</span>
-                       {comment.isInternal && <Badge variant="warning">Internal</Badge>}
+                       {comment.isInternal && <Badge variant="warning">Staff Only</Badge>}
                      </div>
                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{timeAgo(comment.createdAt)}</span>
                    </div>
@@ -354,11 +660,11 @@ export default function TicketDetailPage() {
              {/* Comment Input */}
               <Card style={{ padding: 'var(--s-4)', border: isInternal ? '2px solid var(--warning)' : '1px solid var(--border)' }}>
                 <form onSubmit={handlePostComment}>
-                  {isInternal && <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--warning)', textTransform: 'uppercase', marginBottom: '8px' }}>Posting as Internal Note (Hidden from Customer)</div>}
+                  {isInternal && <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--warning)', textTransform: 'uppercase', marginBottom: '8px' }}>Staff-Only Note (Worker cannot see this)</div>}
                   <textarea 
                     className="input"
                     style={{ height: '80px', paddingTop: '12px', marginBottom: 'var(--s-4)', border: 'none', background: 'var(--bg)', borderRadius: 'var(--r-md)' }}
-                    placeholder={isInternal ? "Write private agent note..." : "Write your message here..."}
+                    placeholder={isInternal ? "Write a private note for staff only..." : "Write your reply here..."}
                     value={commentText}
                     onChange={e => setCommentText(e.target.value)}
                   />
@@ -373,7 +679,7 @@ export default function TicketDetailPage() {
                           onClick={() => setIsInternal(!isInternal)}
                           type="button"
                         >
-                          {isInternal ? "Private Note On" : "Internal Note"}
+                          {isInternal ? 'Staff Note (On)' : 'Mark as Staff-Only'}
                         </Button>
                       )}
                     </div>
@@ -384,7 +690,7 @@ export default function TicketDetailPage() {
                       isLoading={submittingComment} 
                       rightIcon={<Send size={14} />}
                     >
-                      {isInternal ? "Post Private Note" : "Reply"}
+                      {isInternal ? "Post Staff Note" : "Send Reply"}
                     </Button>
                   </div>
                 </form>
@@ -394,82 +700,146 @@ export default function TicketDetailPage() {
 
         {/* Sidebar Info */}
         <div className="flex-col gap-6">
-          <Card title="Properties">
-            <div className="flex-col gap-4">
+          <Card style={{ border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-md)', borderRadius: '24px', overflow: 'hidden' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-light)', background: 'var(--surface-alt)' }}>
+              <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 900, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Shield size={18} color="var(--primary)" /> Ticket Properties
+              </h3>
+            </div>
+            <div style={{ padding: '20px 24px' }} className="flex-col gap-5">
+              
+              {/* Row: Status */}
               <div className="flex-between">
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Status</span>
-                <Badge variant={ticket.status === 'open' ? 'primary' : 'success'}>{ticket.status}</Badge>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <Activity size={14} /> Status
+                </span>
+                <Badge variant={
+                  ticket.status === 'open' ? 'info' : 
+                  ticket.status === 'resolved' ? 'success' : 
+                  ticket.status === 'assigned' ? 'primary' : 
+                  'warning'
+                }>
+                  {ticket.status.replace('_', ' ').toUpperCase()}
+                </Badge>
               </div>
+
+              {/* Row: Priority */}
               <div className="flex-between">
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Priority</span>
-                <div className="flex-center gap-2">
-                  <span className={`priority-dot priority-${ticket.priority}`} />
-                  <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{ticket.priority}</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <ShieldCheck size={14} /> Intensity
+                </span>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <div style={{ width: '40px', height: '6px', borderRadius: '4px', background: ticket.priority === 'low' ? 'var(--success)' : '#E2E8F0' }} />
+                    <div style={{ width: '40px', height: '6px', borderRadius: '4px', background: (ticket.priority === 'medium' || ticket.priority === 'high' || ticket.priority === 'critical') ? (ticket.priority === 'medium' ? 'var(--primary)' : 'var(--warning)') : '#E2E8F0' }} />
+                    <div style={{ width: '40px', height: '6px', borderRadius: '4px', background: (ticket.priority === 'high' || ticket.priority === 'critical') ? 'var(--danger)' : '#E2E8F0' }} />
+                    <span style={{ marginLeft: '8px', fontWeight: 800, fontSize: '0.8rem', color: 'var(--text-main)', textTransform: 'capitalize' }}>{ticket.priority}</span>
                 </div>
               </div>
-              <div className="flex-between">
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Department</span>
-                <span style={{ fontWeight: 600 }}>{ticket.department}</span>
-              </div>
-              <div className="flex-between">
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>Assignee</span>
-                {isAdmin ? (
-                  <select 
-                    style={{ border: 'none', background: 'var(--bg)', fontSize: '0.875rem', fontWeight: 600, padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', maxWidth: '150px' }}
-                    value={ticket.assignedTo?._id || ''}
-                    onChange={(e) => handleAssign(e.target.value)}
-                  >
-                    <option value="">Unassigned</option>
-                    {agents.map(a => (
-                      <option key={a._id} value={a._id}>{a.name}</option>
-                    ))}
-                  </select>
-                ) : ticket.assignedTo ? (
-                   <div className="flex-center gap-2">
-                      <div className="flex-center" style={{ width: '20px', height: '20px', background: getAvatarColor(ticket.assignedTo.name), borderRadius: '4px', color: 'white', fontSize: '0.5rem' }}>{getInitials(ticket.assignedTo.name)}</div>
-                      <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{ticket.assignedTo.name}</span>
+
+              {/* Row: Department */}
+              <div className="flex-between" style={{ padding: '12px 0', borderTop: '1px dashed var(--border)', borderBottom: '1px dashed var(--border)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <Briefcase size={14} /> Domain
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                   <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Lock size={12} />
                    </div>
-                ) : <span style={{ color: 'var(--text-dim)' }}>Unassigned</span>}
+                   <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.875rem' }}>{ticket.department}</span>
+                </div>
+              </div>
+
+              {/* Row: Assignee */}
+              <div className="flex-col gap-3">
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <User size={14} /> Assigned Specialist
+                </span>
+                {isAdmin ? (
+                  <div style={{ position: 'relative' }}>
+                    <select 
+                      style={{ 
+                        width: '100%', appearance: 'none', border: '1px solid var(--border)', 
+                        background: 'white', fontSize: '0.875rem', fontWeight: 700, 
+                        padding: '12px 16px', borderRadius: '14px', cursor: 'pointer', 
+                        boxShadow: 'var(--shadow-sm)', color: 'var(--text-main)' 
+                      }}
+                      value={ticket.assignedTo?._id || ''}
+                      onChange={(e) => handleAssign(e.target.value)}
+                    >
+                      <option value="">Search to assign...</option>
+                      {agents.map(a => (
+                        <option key={a._id} value={a._id}>{a.name} ({a.currentWorkload} active)</option>
+                      ))}
+                    </select>
+                    <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-dim)' }}>
+                       <ChevronRight size={16} transform="rotate(90)" />
+                    </div>
+                  </div>
+                ) : ticket.assignedTo ? (
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg)', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                      <div style={{ width: '36px', height: '36px', background: getAvatarColor(ticket.assignedTo.name), borderRadius: '12px', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.9rem' }}>
+                        {getInitials(ticket.assignedTo.name)}
+                      </div>
+                      <div className="flex-col">
+                        <span style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--text-main)' }}>{ticket.assignedTo.name}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 600 }}>Department Specialist</span>
+                      </div>
+                   </div>
+                ) : (
+                  <div style={{ padding: '16px', borderRadius: '16px', border: '2px dashed var(--border)', textAlign: 'center', background: 'var(--surface-alt)' }}>
+                     <span style={{ color: 'var(--text-dim)', fontSize: '0.82rem', fontWeight: 700, fontStyle: 'italic' }}>Pending Assignment</span>
+                  </div>
+                )}
               </div>
             </div>
           </Card>
 
-          <Card title="Timeline">
-             <div className="flex-col gap-4">
+          <Card title="Activity Log">
+             <div className="flex-col gap-6" style={{ position: 'relative', paddingLeft: '10px' }}>
+                {/* Vertical Line Connector */}
+                <div style={{ position: 'absolute', left: '19px', top: '24px', bottom: '24px', width: '2px', background: 'linear-gradient(to bottom, #E2E8F0, #F1F5F9)', borderRadius: '2px' }} />
+
                 {/* Creation Event */}
-                <div className="flex gap-3">
-                   <div className="flex-col flex-center">
-                     <div className="priority-dot" style={{ background: 'var(--primary)' }} />
-                     {ticket.statusHistory?.length > 0 && <div style={{ flex: 1, width: '2px', background: 'var(--border-light)' }} />}
+                <div className="flex gap-4" style={{ position: 'relative', zIndex: 1 }}>
+                   <div className="flex-center" style={{ width: '20px', height: '20px', background: 'white', borderRadius: '50%', border: '2px solid var(--primary)', color: 'var(--primary)', boxShadow: '0 0 0 4px white' }}>
+                      <Plus size={10} strokeWidth={4} />
                    </div>
                    <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>Ticket Created</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{timeAgo(ticket.createdAt)}</div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '2px' }}>Ticket Initialized</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                         <Clock size={10} /> {timeAgo(ticket.createdAt)}
+                      </div>
                    </div>
                 </div>
 
                 {/* History Events */}
-                {ticket.statusHistory?.map((history, idx) => (
-                  <div key={history._id || idx} className="flex gap-3">
-                    <div className="flex-col flex-center">
-                      <div className="priority-dot" style={{ background: history.to === 'resolved' ? 'var(--success)' : 'var(--warning)' }} />
-                      {idx < ticket.statusHistory.length - 1 && <div style={{ flex: 1, width: '2px', background: 'var(--border-light)' }} />}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'capitalize' }}>
-                        Status: {history.to?.replace('_', ' ')}
+                {ticket.statusHistory?.map((history, idx) => {
+                  const isResolved = history.to === 'resolved' || history.to === 'closed';
+                  return (
+                    <div key={history._id || idx} className="flex gap-4" style={{ position: 'relative', zIndex: 1 }}>
+                      <div className="flex-center" style={{ 
+                        width: '20px', height: '20px', background: 'white', borderRadius: '50%', 
+                        border: `2px solid ${isResolved ? 'var(--success)' : 'var(--warning)'}`, 
+                        color: isResolved ? 'var(--success)' : 'var(--warning)',
+                        boxShadow: '0 0 0 4px white'
+                      }}>
+                        {isResolved ? <CheckCircle2 size={10} strokeWidth={4} /> : <Activity size={10} strokeWidth={4} />}
                       </div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                        {history.changedBy?.name || 'System'} • {timeAgo(history.timestamp)}
+                      <div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '2px' }}>
+                          Shifted to <span style={{ textTransform: 'uppercase', color: isResolved ? 'var(--success-dark)' : 'var(--warning-dark)' }}>{history.to?.replace('_', ' ')}</span>
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <User size={10} /> {history.changedBy?.name || 'Automated System'} • {timeAgo(history.timestamp)}
+                        </div>
                       </div>
-                      {history.reason && <div style={{ fontSize: '0.7rem', marginTop: '2px', color: 'var(--text-muted)', fontStyle: 'italic' }}>"{history.reason}"</div>}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
              </div>
           </Card>
 
-          <Card title="Customer Satisfaction" style={{ background: ticket.feedback?.rating ? '#F0FDF4' : 'white' }}>
+          <Card title="How Was Your Experience?" style={{ background: ticket.feedback?.rating ? '#F0FDF4' : 'white' }}>
              {ticket.feedback?.rating ? (
                <div className="flex-col gap-2">
                   <div className="flex gap-1">
@@ -510,14 +880,14 @@ export default function TicketDetailPage() {
                      disabled={!rating}
                      isLoading={submittingFeedback}
                    >
-                     Submit & Close Ticket
+                     Submit Rating & Close
                    </Button>
                  </div>
                ) : (
                  <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>
                    {ticket.status === 'resolved' 
-                     ? "Creator can now provide feedback." 
-                     : "Waiting for resolution feedback."}
+                     ? "You can now rate how this was handled." 
+                     : "You can rate this once it's fixed."}
                  </p>
                )
              )}
@@ -535,27 +905,19 @@ export default function TicketDetailPage() {
             onClick={e => e.stopPropagation()}
             style={{ maxWidth: '450px' }}
           >
-            <div className="modal-header">
-              <h3 className="card-title">Request Reassignment</h3>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Tell your admin why this ticket should be moved to another agent.</p>
-            </div>
-            <div className="modal-body">
-              <div className="input-group">
-                <label className="input-label">Reason for Request (Mandatory)</label>
-                <textarea 
-                  className="input"
-                  style={{ height: '120px', paddingTop: '12px' }}
-                  placeholder="e.g., This issue requires specialized knowledge in Finance systems which I don't have access to."
-                  value={reassignReason}
-                  onChange={e => setReassignReason(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <Button variant="ghost" onClick={() => setIsReassignModalOpen(false)}>Cancel</Button>
-              <Button isLoading={submittingReassign} onClick={handleReassignRequest}>Send Request</Button>
-            </div>
+             <h3 style={{ marginBottom: '16px' }}>Ask to Transfer Ticket</h3>
+             <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '16px' }}>Please explain why this ticket should be transferred to another agent.</p>
+             <textarea 
+               className="input" 
+               style={{ height: '100px', marginBottom: '20px' }}
+               placeholder="Reason for transfer..."
+               value={reassignReason}
+               onChange={e => setReassignReason(e.target.value)}
+             />
+             <div className="flex-end gap-3">
+                <Button variant="ghost" onClick={() => setIsReassignModalOpen(false)}>Cancel</Button>
+                <Button onClick={handleReassignRequest} isLoading={submittingReassign}>Send Request</Button>
+             </div>
           </motion.div>
         </div>
       )}

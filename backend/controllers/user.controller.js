@@ -34,7 +34,7 @@ const getUsers = async (req, res, next) => {
 const getAgents = async (req, res, next) => {
   try {
     const { category } = req.query;
-    const query = { role: { $in: ['support_agent', 'admin'] }, isActive: true };
+    const query = { role: 'support_agent', isActive: true };
     if (category) query.expertise = category;
     
     // If user is a department admin (not Super Admin), restrict agents to their department

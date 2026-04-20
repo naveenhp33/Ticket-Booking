@@ -217,35 +217,87 @@ export default function DashboardPage() {
         </div>
 
         <div className="create-ticket-grid">
-           <div className="premium-card">
-              <div className="flex-between mb-6">
-                <h3 style={{ fontWeight: 800, fontSize: '1.1rem' }}>My Recent Tickets</h3>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/tickets')}>View History</Button>
+           <Card style={{ border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-md)', borderRadius: '24px', overflow: 'hidden' }}>
+              <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white' }}>
+                <div>
+                   <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>Recent Intelligence</h2>
+                   <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-dim)', fontWeight: 600 }}>Real-time stream of incoming and active requests</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/tickets')} style={{ fontWeight: 800 }}>View All <ArrowUpRight size={16} /> </Button>
               </div>
-              <div className="premium-table-wrapper">
-                <table className="premium-table">
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr>
-                      <th>Subject</th>
-                      <th>Last Updated</th>
-                      <th>Status</th>
+                    <tr style={{ textAlign: 'left', background: 'var(--surface-alt)' }}>
+                      <th style={{ padding: '16px 32px', fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Requester</th>
+                      <th style={{ padding: '16px 32px', fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Information</th>
+                      <th style={{ padding: '16px 32px', fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</th>
+                      <th style={{ padding: '16px 32px', fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Priority</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {recentTickets.length > 0 ? recentTickets.map(t => (
-                      <tr key={t._id} onClick={() => navigate(`/tickets/${t._id}`)} className="dashboard-row">
-                        <td>
-                          <div style={{ fontWeight: 700 }}>{t.title}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>ID: #{t.ticketId}</div>
+                    {recentTickets.length > 0 ? recentTickets.map((t, idx) => {
+                      const creatorName = t.createdBy?.name || 'System';
+                      return (
+                        <tr 
+                          key={t._id} 
+                          onClick={() => navigate(`/tickets/${t._id}`)} 
+                          className="premium-table-row"
+                          style={{ 
+                            borderBottom: '1px solid var(--border-light)', cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <td style={{ padding: '20px 32px' }}>
+                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--bg)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 900, border: '1px solid var(--border)' }}>
+                                   {creatorName[0]}
+                                </div>
+                                <div className="flex-col">
+                                   <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-main)' }}>{creatorName}</span>
+                                   <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600 }}>{new Date(t.createdAt).toLocaleDateString()}</span>
+                                </div>
+                             </div>
+                          </td>
+                          <td style={{ padding: '20px 32px' }}>
+                             <div className="flex-col">
+                                <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.95rem' }}>{t.title}</span>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 800, letterSpacing: '0.5px' }}>#{t.ticketId}</span>
+                             </div>
+                          </td>
+                          <td style={{ padding: '20px 32px' }}>
+                             <Badge variant={
+                               t.status === 'open' ? 'info' : 
+                               t.status === 'resolved' ? 'success' : 
+                               t.status === 'assigned' ? 'primary' : 
+                               'warning'
+                             }>
+                               {t.status?.replace('_', ' ')}
+                             </Badge>
+                          </td>
+                          <td style={{ padding: '20px 32px' }}>
+                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: PRIORITY_COLORS[t.priority.toLowerCase()], boxShadow: `0 0 10px ${PRIORITY_COLORS[t.priority.toLowerCase()]}` }} />
+                                <span style={{ fontWeight: 700, fontSize: '0.85rem', textTransform: 'capitalize' }}>{t.priority}</span>
+                             </div>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan="4" style={{ textAlign: 'center', padding: '100px' }}>
+                           <div className="flex-col items-center gap-4">
+                              <Ticket size={48} style={{ color: 'var(--border)', marginBottom: '16px' }} />
+                              <p style={{ fontWeight: 800, color: 'var(--text-dim)' }}>Zero items in reach.</p>
+                           </div>
                         </td>
-                        <td style={{ fontSize: '0.85rem' }}>{new Date(t.updatedAt).toLocaleDateString()}</td>
-                        <td><Badge variant={t.status === 'open' ? 'info' : t.status === 'resolved' ? 'success' : 'primary'}>{t.status}</Badge></td>
                       </tr>
-                    )) : <tr><td colSpan="3" style={{ textAlign: 'center', padding: '40px' }}>No active tickets.</td></tr>}
+                    )}
                   </tbody>
                 </table>
               </div>
-           </div>
+            </Card>
 
            <div className="flex-col gap-6">
               <div className="premium-card">
@@ -280,10 +332,14 @@ export default function DashboardPage() {
       className="page-layout"
     >
       {/* Hero Header */}
-      <div className="flex-between mb-8" style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #020617 100%)', padding: 'var(--s-8)', borderRadius: 'var(--r-xl)', color: 'white', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 10px 30px -10px rgba(30, 58, 138, 0.5)' }}>
+      <div className="flex-between mb-8 dashboard-hero" style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #020617 100%)', padding: 'var(--s-8)', borderRadius: 'var(--r-xl)', color: 'white', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 10px 30px -10px rgba(30, 58, 138, 0.5)' }}>
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'white' }}>Welcome back, Team!</h1>
-          <p style={{ opacity: 0.85 }}>Here’s your support performance overview for today.</p>
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'white' }}>
+            {user?.role === 'support_agent' ? `Ready for work, ${user?.name.split(' ')[0]}?` : 'Welcome back, Team!'}
+          </h1>
+          <p style={{ opacity: 0.85 }}>
+            {user?.role === 'support_agent' ? 'Here is a summary of your assigned tasks and performance today.' : 'Here’s your support performance overview for today.'}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button className="premium-btn" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', backdropFilter: 'blur(10px)' }}>Download Report</button>
@@ -352,6 +408,27 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      
+      {/* Admin Quick Action: Reassignment Requests */}
+      {user?.role === 'admin' && stats?.pendingReassignRequests > 0 && (
+         <div 
+          onClick={() => navigate('/tickets')} 
+          style={{ 
+            marginBottom: 'var(--s-8)', padding: '16px 20px', borderRadius: 'var(--r-lg)', 
+            background: '#FFFBEB', border: '2px dashed var(--warning)', 
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '16px' 
+          }}
+         >
+            <div style={{ background: 'white', color: 'var(--warning)', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--warning)' }}>
+               <Shield size={20} />
+            </div>
+            <div style={{ flex: 1 }}>
+               <div style={{ fontWeight: 800, color: '#92400e' }}>{stats.pendingReassignRequests} Ticket Reassignment Requests Pending</div>
+               <div style={{ fontSize: '0.82rem', color: '#b45309' }}>Agents are asking to transfer their workload. Action required from Admin.</div>
+            </div>
+            <Button size="sm" variant="warning">View Requests</Button>
+         </div>
+      )}
 
       {/* Analytics & Layout Grid */}
       <div className="premium-dashboard-grid">
@@ -365,7 +442,7 @@ export default function DashboardPage() {
                 <h3 style={{ fontWeight: 800, fontSize: '1.1rem' }}>Weekly Resolution Trend</h3>
                 <Badge variant="success">Completed</Badge>
               </div>
-              <div style={{ height: '240px' }}>
+              <div className="chart-container-md" style={{ height: '240px' }}>
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <LineChart data={chartData}>
                     <defs>
@@ -388,7 +465,7 @@ export default function DashboardPage() {
               <div className="premium-card-header">
                 <h3 className="premium-card-title">Ticket Volume</h3>
               </div>
-              <div style={{ height: '260px' }}>
+              <div className="chart-container-md" style={{ height: '260px' }}>
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
@@ -415,10 +492,10 @@ export default function DashboardPage() {
                   <tr>
                     <th>Ticket ID</th>
                     <th>Subject</th>
-                    <th>Priority</th>
+                    <th className="hide-mobile">Priority</th>
                     <th>Status</th>
-                    <th>Date</th>
-                    <th></th>
+                    <th className="hide-tablet hide-mobile">Date</th>
+                    <th className="hide-mobile"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -431,21 +508,26 @@ export default function DashboardPage() {
                         <div style={{ fontWeight: 700, color: 'var(--text-dark)' }}>{t.title}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>by {t.createdBy?.name || 'Unknown'}</div>
                       </td>
-                      <td>
+                      <td className="hide-mobile">
                         <div className="flex-center gap-2">
                            <span className={`priority-indicator priority-${t.priority}`} />
                            <span style={{ textTransform: 'capitalize', fontWeight: 600, fontSize: '0.8rem' }}>{t.priority}</span>
                         </div>
                       </td>
                       <td>
-                        <Badge variant={t.status === 'open' ? 'info' : t.status === 'resolved' ? 'success' : 'primary'}>
+                        <Badge variant={
+                          t.status === 'open' ? 'info' : 
+                          t.status === 'resolved' ? 'success' : 
+                          t.status === 'assigned' ? 'primary' : 
+                          'warning'
+                        }>
                           {t.status?.replace('_', ' ')}
                         </Badge>
                       </td>
-                      <td style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>
+                      <td className="hide-tablet hide-mobile" style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>
                         {new Date(t.createdAt).toLocaleDateString()}
                       </td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td className="hide-mobile" style={{ textAlign: 'right' }}>
                         <button className="row-action-btn"><MoreHorizontal size={16} /></button>
                       </td>
                     </tr>
@@ -466,7 +548,7 @@ export default function DashboardPage() {
             <div className="premium-card-header">
               <h3 className="premium-card-title">Priority Breakdown</h3>
             </div>
-            <div style={{ height: '200px' }}>
+            <div style={{ height: '200px' }} className="chart-container-pie">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie

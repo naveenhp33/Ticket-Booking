@@ -14,6 +14,16 @@ const { startEmailPoller } = require('./services/emailPoller.service');
 const errorHandler = require('./middleware/errorHandler');
 const notFound = require('./middleware/notFound');
 
+// Prevent server crash on unhandled network/IMAP errors
+process.on('uncaughtException', (err) => {
+  console.error('🔥 CRITICAL: Uncaught Exception:', err.message);
+  if (err.code === 'ETIMEOUT') console.log('🛡️  Suppressed ETIMEOUT crash.');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔥 CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 // Route imports
 const authRoutes = require('./routes/auth.routes');
 const ticketRoutes = require('./routes/ticket.routes');
@@ -122,19 +132,16 @@ if (fs.existsSync(frontendDist)) {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`\n🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-  console.log(`📡 Socket.io initialized`);
-
+// Connect DB and Start Services
+connectDB().then(() => {
   // Start email poller if configured
-  const method = process.env.EMAIL_POLLING_METHOD || 'GMAIL';
+  const method = process.env.EMAIL_POLLING_METHOD || 'IMAP';
   const hasGmailConfig = process.env.GMAIL_REFRESH_TOKEN && !process.env.GMAIL_REFRESH_TOKEN.includes('your_gmail');
-  const hasImapConfig = process.env.IMAP_USER && !process.env.IMAP_USER.includes('itadmin@vdartinc.com'); // Check if user changed it from placeholder? Actually let's just check if it's there
+  const hasImapConfig = process.env.IMAP_USER && !process.env.IMAP_USER.includes('itadmin@vdartinc.com');
   
-  if ((method === 'GMAIL' && hasGmailConfig) || (method === 'IMAP' && process.env.IMAP_USER)) {
+  if ((method === 'GMAIL' && hasGmailConfig) || (method === 'IMAP' && hasImapConfig) || (method === 'SMTP' && hasImapConfig)) {
     startEmailPoller();
-    console.log(`📧 ${method} email poller started`);
+    console.log(`📧 Email poller started (Method: ${method === 'SMTP' ? 'IMAP (via SMTP settings)' : method})`);
   }
   
   // RUN SYSTEM SANITY CHECKS (Refactored logic from legacy utility scripts)
@@ -143,26 +150,32 @@ server.listen(PORT, () => {
   
   (async () => {
     try {
-      // 1. Fix negative workloads (from fix-agents.js)
+      // 1. Fix negative workloads
       const fixResults = await User.updateMany({ currentWorkload: { $lt: 0 } }, { $set: { currentWorkload: 0 } });
       if (fixResults.modifiedCount > 0) console.log(`🔧 HealthCheck: Fixed ${fixResults.modifiedCount} negative workloads.`);
       
-      // 2. Normalize IT admin expertise (from fix-agents.js)
+      // 2. Normalize IT admin expertise
       const adminResults = await User.updateMany(
         { role: 'admin', department: 'IT', expertise: { $size: 0 } },
         { $set: { expertise: ['IT'] } }
       );
       if (adminResults.modifiedCount > 0) console.log(`🔧 HealthCheck: Initialized expertise for ${adminResults.modifiedCount} IT admins.`);
       
-      // 3. Log agent summary (from check-agents.js)
+      // 3. Log agent summary
       const activeAgents = await User.find({ role: { $in: ['support_agent', 'admin'] }, isActive: true }).countDocuments();
       console.log(`📡 HealthCheck: ${activeAgents} agents currently active and monitored.`);
       
-      // 4. One-time patch for TKT-00005 (from fix-ticket.js)
+      // 4. One-time patch for TKT-00005
       await Ticket.updateOne({ ticketId: 'TKT-00005', category: { $ne: 'IT' } }, { $set: { category: 'IT' } });
       
     } catch (e) { console.error('❌ HealthCheck Error:', e.message); }
   })();
+});
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`\n🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  console.log(`📡 Socket.io initialized`);
 });
 
 module.exports = { app, server };

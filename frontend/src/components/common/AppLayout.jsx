@@ -38,7 +38,7 @@ const NAV_ITEMS = {
   ],
   support_agent: [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/tickets?myTickets=true', label: 'My Queue', icon: TrendingUp },
+    { path: '/tickets?myTickets=true&status=open,assigned,in_progress,almost_complete,reopened', label: 'My Queue', icon: TrendingUp },
     { path: '/profile',   label: 'Profile',    icon: User },
   ],
   admin: [
@@ -113,7 +113,12 @@ export default function AppLayout() {
 
   const handleSearch = (e) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
-      navigate(`/tickets?search=${encodeURIComponent(searchQuery.trim())}`);
+      const q = encodeURIComponent(searchQuery.trim());
+      if (location.pathname.startsWith('/knowledge')) {
+        navigate(`/knowledge?search=${q}`);
+      } else {
+        navigate(`/tickets?search=${q}`);
+      }
       setSearchQuery('');
     }
   };
@@ -150,25 +155,30 @@ export default function AppLayout() {
               navigate('/tickets');
             }
           }}
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: 'pointer', padding: '32px 24px' }}
         >
-          <div className="premium-brand-icon">T</div>
-          <span>TicketDesk</span>
+          <div className="premium-brand-icon" style={{ boxShadow: '0 0 20px rgba(30, 64, 175, 0.3)' }}>T</div>
+          <span style={{ fontWeight: 900, letterSpacing: '-0.5px' }}>TicketDesk</span>
         </div>
 
         <nav className="premium-nav">
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', paddingLeft: '16px' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', paddingLeft: '16px',   }}>
             Main Menu
           </div>
           {navItems.map((item) => {
             const checkActive = (isActive) => {
+              const currentSearch = location.search;
+              const isMyTicketsInUrl = currentSearch.includes('myTickets=true');
+              
               if (item.path === '/tickets') {
                 if (location.pathname === '/tickets/new') return false;
-                return isActive && !location.search.includes('myTickets=true');
+                return isActive && !isMyTicketsInUrl;
               }
-              if (item.path === '/tickets?myTickets=true') {
-                return isActive && location.search.includes('myTickets=true');
+              
+              if (item.path.includes('myTickets=true')) {
+                return isMyTicketsInUrl;
               }
+              
               return isActive;
             };
 
@@ -197,7 +207,7 @@ export default function AppLayout() {
       <div className="premium-main">
         {/* TOP NAVBAR */}
         <header className="premium-header">
-          <div style={{ display: 'flex', width: '100%', maxWidth: '1600px', margin: '0 auto', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }} className="premium-header-inner">
+          <div style={{ display: 'flex', width: '100%', maxWidth: '1600px', margin: '0 auto', alignItems: 'center', justifyContent: 'space-between', padding: '0 48px' }} className="premium-header-inner">
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <button className="hide-desktop" onClick={() => setMobileOpen(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
                 <Menu size={24} />
