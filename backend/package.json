@@ -1,5 +1,5 @@
 {
-  "name": "ticket-system-backend",
+  "name": "vdesk-backend",
   "version": "1.0.0",
   "description": "Production-level IT Ticket Management System - Backend",
   "main": "server.js",

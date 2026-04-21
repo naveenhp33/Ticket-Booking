@@ -22,7 +22,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await login(form.email, form.password);
-      toast.success('Welcome back to TicketDesk');
+      toast.success('Welcome back to VDesk');
       
       const role = res.role; // Assuming login returns user data with role
       if (['admin', 'support_agent'].includes(role)) {
@@ -42,8 +42,8 @@ export default function LoginPage() {
       {/* Branding Panel */}
       <div className="auth-page__brand">
         <div className="auth-page__logo-fixed">
-          <div className="flex-center" style={{ width: '32px', height: '32px', background: 'white', color: 'var(--primary)', borderRadius: 'var(--r-md)', fontWeight: 800 }}>T</div>
-          TicketDesk
+          <div className="flex-center" style={{ width: '32px', height: '32px', background: 'white', color: 'var(--primary)', borderRadius: 'var(--r-md)', fontWeight: 800 }}>V</div>
+          VDesk
         </div>
         
         <div className="auth-page__brand-content">

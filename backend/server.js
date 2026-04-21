@@ -97,7 +97,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/api', (req, res) => {
   res.json({ 
     success: true, 
-    message: 'Ticket System API v1.1 is live', 
+    message: 'VDesk API v1.1 is live', 
     endpoints: {
       auth: '/api/auth',
       tickets: '/api/tickets',
@@ -119,7 +119,7 @@ app.use('/api/knowledge', knowledgeRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'Ticket System API is running', timestamp: new Date().toISOString() });
+  res.json({ success: true, message: 'VDesk API is running', timestamp: new Date().toISOString() });
 });
 
 // Serve frontend static files if built (works in production on Render)

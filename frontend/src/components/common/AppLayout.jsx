@@ -157,8 +157,8 @@ export default function AppLayout() {
           }}
           style={{ cursor: 'pointer', padding: '32px 24px' }}
         >
-          <div className="premium-brand-icon" style={{ boxShadow: '0 0 20px rgba(30, 64, 175, 0.3)' }}>T</div>
-          <span style={{ fontWeight: 900, letterSpacing: '-0.5px' }}>TicketDesk</span>
+          <div className="premium-brand-icon" style={{ boxShadow: '0 0 20px rgba(30, 64, 175, 0.3)' }}>V</div>
+          <span style={{ fontWeight: 900, letterSpacing: '-0.5px' }}>VDesk</span>
         </div>
 
         <nav className="premium-nav">

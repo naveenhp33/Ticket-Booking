@@ -45,14 +45,14 @@ export default function RegisterPage() {
       {/* Left Column: Branding */}
       <div className="auth-page__brand">
         <div className="auth-page__logo-fixed">
-          <div className="flex-center" style={{ width: '32px', height: '32px', background: 'white', color: 'var(--primary)', borderRadius: 'var(--r-md)', fontWeight: 800 }}>T</div>
-          TicketDesk
+          <div className="flex-center" style={{ width: '32px', height: '32px', background: 'white', color: 'var(--primary)', borderRadius: 'var(--r-md)', fontWeight: 800 }}>V</div>
+          VDesk
         </div>
         
         <div className="auth-page__brand-content">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="auth-page__tagline">Empowering your support<br />workflow.</h1>
-            <p className="auth-page__tagline-sub">Join thousands of VDartians who use TicketDesk to resolve IT hurdles efficiently and collaboratively.</p>
+            <p className="auth-page__tagline-sub">Join thousands of VDartians who use VDesk to resolve IT hurdles efficiently and collaboratively.</p>
             
             <div className="auth-page__features-pills">
               <span className="feature-pill">Internal Knowledge Base</span>

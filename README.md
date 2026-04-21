@@ -1,7 +1,7 @@
-# IT Support Ticket Management System — Requirements (v1.1)
+# VDesk — Premium IT Support Hub (v1.1)
 
 ## Project Info
-- **Project:** IT Support Ticket Management System
+- **Project:** VDesk — IT Support & Asset Management System
 - **Client:** VDart (Internal)
 - **Stack:** MERN (MongoDB, Express.js, React.js, Node.js)
 - **Version:** 1.1
@@ -12,20 +12,23 @@
 
 ### Employee
 - [x] Login using @vdartinc.com email only
-- [x] Raise IT support ticket
-- [x] View all submitted tickets
-- [x] Check ticket status
-- [x] Receive acknowledgment email on ticket creation
-- [x] Receive resolution email when ticket is resolved
+- [x] Raise IT support ticket (Portal or Email)
+- [x] **New:** Confirm Agent Arrival for on-site visits
+- [x] **New:** Verify Resolution ("Handshake") before ticket closure
+- [x] View real-time "Request Journey" progress
+- [x] Receive automated status/SLA notifications
+
+### Support Agent
+- [x] Real-time dashboard for assigned tickets
+- [x] Update live status (Available / On-Site / Remote / Away)
+- [x] Log on-site arrival (Requires employee verification)
+- [x] Propose resolutions and submit internal notes
 
 ### Admin
-- [x] Login to admin dashboard
-- [x] View all tickets from all employees
-- [x] Filter tickets by status
-- [x] Update ticket priority (Low / Medium / High)
-- [x] Update ticket status (Open → In Progress → Resolved → Closed)
-- [x] Send acknowledgment email within 15 minutes (SLA)
-- [x] Send resolution email when ticket is closed
+- [x] Centralized governance and resource allocation
+- [x] View systemic analytics and department-wise workloads
+- [x] Global filter for status, priority, and department
+- [x] Manage User Expertise and Load-Balancing rules
 
 ---
 
@@ -63,6 +66,9 @@
 ---
 
 ## Technical Features Implemented
+- **On-Site Accountability**: Fraud-proof "Resolution Handshake" workflow where agents must have arrival and completion verified by the employee.
+- **Bidirectional Email**: Native IMAP/SMTP integration using `imapflow` for ticket creation and threaded replies.
+- **Auto-Resolution Cron**: Background service that monitors pending confirmations and automatically closes tickets after 24 hours of inactivity.
 - **Smart Priority Scoring**: Intelligent algorithm mathematically determining root ticket weight via impact formulas.
 - **Duplicate Detection**: Intercepts the employee creation flow via debounced searches to suggest pre-existing issues.
 - **Executive Escalations**: Hierarchy-aware workflows bypassing standard user queues to alert the Head of IT instantly.
