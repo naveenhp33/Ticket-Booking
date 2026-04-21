@@ -75,7 +75,7 @@ const sendTicketConfirmation = async ({ to, name, ticket }) => {
     const transport = await getTransporter();
     if (!transport) return;
 
-    await transport.sendMail({
+    const mailOptions = {
       from: `"IT Support" <${process.env.SUPPORT_EMAIL}>`,
       to,
       subject: `[${ticket.ticketId}] Ticket Received: ${ticket.title}`,
@@ -99,7 +99,16 @@ const sendTicketConfirmation = async ({ to, name, ticket }) => {
           </div>
         </div>
       `
-    });
+    };
+
+    if (ticket.emailSource && ticket.emailSource.messageId) {
+      mailOptions.inReplyTo = ticket.emailSource.messageId;
+      mailOptions.references = [ticket.emailSource.messageId];
+      // Keep the original subject if it was a reply? 
+      // Actually keeping the ticket subject is better for tracking.
+    }
+
+    await transport.sendMail(mailOptions);
     console.log(`📧 Confirmation email sent to ${to}`);
   } catch (err) {
     console.error('❌ Email send error:', err.message);
@@ -187,16 +196,17 @@ const sendResolveEmail = async ({ to, name, ticket }) => {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: #198754; color: white; padding: 20px 30px; border-radius: 8px 8px 0 0;">
-            <h2 style="margin: 0;">🎉 Ticket Resolved</h2>
+            <h2 style="margin: 0;">✅ Issue Officially Resolved</h2>
           </div>
           <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef;">
             <p>Hi <strong>${name}</strong>,</p>
-            <p>Great news! Your support ticket has been resolved.</p>
+            <p>Your support ticket has been officially closed following your confirmation.</p>
             <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 20px; margin: 20px 0;">
               <p style="margin: 0 0 8px;"><strong>Ticket ID:</strong> ${ticket.ticketId}</p>
-              <p style="margin: 0;"><strong>Title:</strong> ${ticket.title}</p>
+              <p style="margin: 0 0 8px;"><strong>Title:</strong> ${ticket.title}</p>
+              <p style="margin: 0;"><strong>Final Status:</strong> COMPLETED / CLOSED</p>
             </div>
-            <p>Please log in to the portal to confirm resolution or reopen if the issue persists.</p>
+            <p>Thank you for your feedback and for helping us maintain high support standards.</p>
             <p style="color: #6c757d; font-size: 13px; margin-top: 30px;">This is an automated message. Please do not reply to this email.</p>
           </div>
         </div>
@@ -214,19 +224,21 @@ const sendStatusChangeEmail = async ({ to, name, ticket, newStatus }) => {
     if (!transport) return;
 
     const statusMap = {
+      assigned:        { label: '👤 Ticket Assigned',        color: '#6366F1', message: 'Your ticket has been assigned to a support agent who will begin working on it shortly.' },
       in_progress:     { label: '🔧 We are working on it',   color: '#2563EB', message: 'Good news! Our team has started working on your problem. We will keep you updated.' },
       almost_complete: { label: '🏁 Almost done!',           color: '#7C3AED', message: 'We are almost finished fixing your issue. It should be resolved very soon.' },
-      resolved:        { label: '✅ Your problem is fixed!', color: '#059669', message: 'Great news! Your issue has been fully resolved. Please log in to confirm or let us know if it is still happening.' },
+      resolved:        { label: '🔍 Fix Verification Requested', color: '#059669', message: 'The agent has finished their work and marked the issue as fixed. Please log in to verify the solution so we can officially close this ticket.' },
       pending_info:    { label: '❓ We need more info',      color: '#D97706', message: 'We need a bit more information from you to continue. Please check your ticket and reply.' },
+      reopened:        { label: '🔄 Ticket Reopened',        color: '#EF4444', message: 'Your ticket has been reopened and is back in our queue.' },
       closed:          { label: '🔒 Ticket closed',          color: '#64748B', message: 'Your ticket has been closed. If the problem comes back, you can always open a new one.' },
     };
 
-    const s = statusMap[newStatus] || { label: `Update on your ticket`, color: '#1a1a2e', message: 'Your ticket status has been updated.' };
+    const s = statusMap[newStatus] || { label: `Update on your ticket`, color: '#1a1a2e', message: `Your ticket status has been updated to ${newStatus.replace(/_/g, ' ')}.` };
 
-    await transport.sendMail({
+    const mailOptions = {
       from: `"IT Support" <${process.env.FROM_EMAIL || process.env.SUPPORT_EMAIL}>`,
       to,
-      subject: `[${ticket.ticketId}] ${s.label}`,
+      subject: `[${ticket.ticketId}] ${s.label}: ${ticket.title}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: ${s.color}; color: white; padding: 20px 30px; border-radius: 8px 8px 0 0;">
@@ -238,14 +250,22 @@ const sendStatusChangeEmail = async ({ to, name, ticket, newStatus }) => {
             <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 20px; margin: 20px 0;">
               <p style="margin: 0 0 8px;"><strong>Ticket ID:</strong> ${ticket.ticketId}</p>
               <p style="margin: 0 0 8px;"><strong>Problem:</strong> ${ticket.title}</p>
-              <p style="margin: 0;"><strong>Current Status:</strong> ${s.label}</p>
+              <p style="margin: 0;"><strong>Current Status:</strong> ${newStatus.replace(/_/g, ' ').toUpperCase()}</p>
             </div>
             <p>You can check your ticket anytime by logging into the support portal.</p>
             <p style="color: #6c757d; font-size: 13px; margin-top: 30px;">This is an automatic update. Please do not reply to this email.</p>
           </div>
         </div>
       `
-    });
+    };
+
+    // Threading support for email-originated tickets
+    if (ticket.emailSource && ticket.emailSource.messageId) {
+      mailOptions.inReplyTo = ticket.emailSource.messageId;
+      mailOptions.references = [ticket.emailSource.messageId];
+    }
+
+    await transport.sendMail(mailOptions);
     console.log(`📧 Status change email (${newStatus}) sent to ${to}`);
   } catch (err) {
     console.error('❌ Status change email error:', err.message);

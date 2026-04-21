@@ -89,7 +89,7 @@ const ticketSchema = new mongoose.Schema({
   // Status
   status: {
     type: String,
-    enum: ['open', 'assigned', 'in_progress', 'almost_complete', 'pending_info', 'resolved', 'closed', 'reopened'],
+    enum: ['open', 'assigned', 'in_progress', 'almost_complete', 'pending_info', 'pending_confirmation', 'resolved', 'closed', 'reopened'],
     default: 'open'
   },
 
@@ -180,9 +180,24 @@ const ticketSchema = new mongoose.Schema({
   // Resolution
   resolution: {
     notes: String,
+    type: {
+      type: String,
+      enum: ['on_site_fix', 'remote_fix', 'guided_employee', 'config_change', 'other']
+    },
     resolvedAt: Date,
+    pendingConfirmationAt: Date,
     resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     knowledgeBaseRef: String
+  },
+
+  // On-Site Visit Workflow
+  onSiteVisit: {
+    requestedAt: Date,
+    arrivedAt: Date,
+    arrivalConfirmedByEmployee: { type: Boolean, default: false },
+    completionConfirmedByEmployee: { type: Boolean, default: false },
+    visitResolvedAt: Date,
+    locationVerified: { type: Boolean, default: false }
   },
 
   // Feedback

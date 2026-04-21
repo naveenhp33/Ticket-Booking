@@ -22,7 +22,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
-import { notificationService } from '../../services/ticketService';
+import { notificationService, userService } from '../../services/ticketService';
 import { getInitials, getAvatarColor } from '../../utils/helpers';
 import { motion, AnimatePresence } from 'framer-motion';
 import '../../styles/dashboard-premium.css';
@@ -52,7 +52,7 @@ const NAV_ITEMS = {
 };
 
 export default function AppLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const { on } = useSocket();
   const toast = useToast();
   const navigate = useNavigate();
@@ -289,17 +289,57 @@ export default function AppLayout() {
                 style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingLeft: '16px', borderLeft: '1px solid var(--border)', cursor: 'pointer' }}
                 onClick={() => navigate('/profile')}
               >
-                <div
-                  className="premium-avatar"
-                  style={{ background: getAvatarColor(user?.name) }}
-                >
-                  {getInitials(user?.name)}
-                </div>
                 <div className="hide-mobile">
                   <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text)' }}>{user?.name || 'User'}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'capitalize' }}>{user?.role?.replace('_', ' ') || 'Role'}</div>
                 </div>
               </div>
+
+               {/* Status Toggle for Agents/Admins */}
+               {(user?.role === 'support_agent' || user?.role === 'admin') && (
+                 <div style={{ position: 'relative', marginLeft: '8px' }}>
+                    <div 
+                      className={user?.role === 'admin' ? 'status-toggle-active' : ''}
+                      style={{ 
+                        padding: '4px 12px', borderRadius: '20px', 
+                        background: 'var(--bg)', border: '1px solid var(--border)',
+                        display: 'flex', alignItems: 'center', gap: '8px', 
+                        cursor: user?.role === 'admin' ? 'pointer' : 'default',
+                        transition: 'all 0.2s ease',
+                        opacity: user?.role === 'admin' ? 1 : 0.9
+                      }}
+                      onClick={(e) => {
+                        if (user?.role !== 'admin') return;
+                       const rect = e.currentTarget.getBoundingClientRect();
+                       const statusMap = {
+                         available: { label: 'Available', color: '#10B981' },
+                         on_site: { label: 'On-Site', color: '#3B82F6' },
+                         remote: { label: 'Remote', color: '#F59E0B' },
+                         unavailable: { label: 'Away', color: '#EF4444' }
+                       };
+                       const statuses = ['available', 'on_site', 'remote', 'unavailable'];
+                       const currentIdx = statuses.indexOf(user?.liveStatus || 'available');
+                       const nextStatus = statuses[(currentIdx + 1) % statuses.length];
+                       
+                       userService.updateLiveStatus({ status: nextStatus })
+                         .then(res => {
+                           updateUser({ liveStatus: res.data.status });
+                           toast.success(`Status updated to ${nextStatus.replace('_', ' ')}`);
+                         })
+                         .catch(err => toast.error(err.response?.data?.message || 'Failed to update status'));
+                     }}
+                   >
+                     <div style={{ 
+                       width: '8px', height: '8px', borderRadius: '50%', 
+                       background: ({ available: '#10B981', on_site: '#3B82F6', remote: '#F59E0B', unavailable: '#EF4444' })[user?.liveStatus || 'available'],
+                       boxShadow: `0 0 8px ${({ available: '#10B981', on_site: '#3B82F6', remote: '#F59E0B', unavailable: '#EF4444' })[user?.liveStatus || 'available']}88`
+                     }} />
+                     <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                        {({ available: 'Available', on_site: 'On-Site', remote: 'Remote', unavailable: 'Away' })[user?.liveStatus || 'available']}
+                     </span>
+                   </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

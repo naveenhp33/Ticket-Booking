@@ -46,7 +46,8 @@ const getAgents = async (req, res, next) => {
     }
 
     const agents = await User.find(query)
-      .select('name email department currentWorkload expertise avatar')
+      .select('name email department currentWorkload expertise avatar liveStatus onSiteTicket lastStatusUpdate')
+      .populate('onSiteTicket', 'ticketId title status location onSiteVisit')
       .sort({ currentWorkload: 1 })
       .lean();
 
@@ -135,4 +136,55 @@ const getUserStats = async (req, res, next) => {
   }
 };
 
-module.exports = { getUsers, getAgents, getUser, updateUser, getUserStats };
+// @desc    Update agent live status
+// @route   PUT /api/users/status
+// @access  Private (agent/admin)
+const updateLiveStatus = async (req, res, next) => {
+  try {
+    const { status, ticketId } = req.body;
+    const userId = req.user._id;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Validation: Only one active on-site allowed
+    if (status === 'on_site') {
+      if (user.liveStatus === 'on_site' && user.onSiteTicket && user.onSiteTicket.toString() !== ticketId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `You are already on-site for ticket ${user.onSiteTicket}. Please resolve it or handover before switching.` 
+        });
+      }
+      user.onSiteTicket = ticketId;
+    } else {
+      // If moving away from on_site, clear the ticket Ref
+      user.onSiteTicket = null;
+    }
+
+    user.liveStatus = status;
+    user.lastStatusUpdate = new Date();
+    await user.save();
+
+    // Broadcast to admins for live view
+    emitToRole('admin', 'agent_status_updated', {
+      agentId: user._id,
+      name: user.name,
+      status: user.liveStatus,
+      ticketId: user.onSiteTicket,
+      timestamp: user.lastStatusUpdate
+    });
+
+    res.json({ success: true, status: user.liveStatus, onSiteTicket: user.onSiteTicket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { 
+  getUsers, 
+  getAgents, 
+  getUser, 
+  updateUser, 
+  getUserStats,
+  updateLiveStatus
+};

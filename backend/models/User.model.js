@@ -63,7 +63,15 @@ const userSchema = new mongoose.Schema({
     totalRaised: { type: Number, default: 0 },
     totalResolved: { type: Number, default: 0 },
     avgResolutionTime: { type: Number, default: 0 } // in hours
-  }
+  },
+  // Real-time Status System
+  liveStatus: {
+    type: String,
+    enum: ['available', 'on_site', 'remote', 'unavailable'],
+    default: 'available'
+  },
+  onSiteTicket: { type: mongoose.Schema.Types.ObjectId, ref: 'Ticket', default: null },
+  lastStatusUpdate: { type: Date, default: Date.now }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

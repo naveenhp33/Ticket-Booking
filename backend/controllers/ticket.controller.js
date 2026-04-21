@@ -10,7 +10,7 @@ const {
 } = require('../services/priority.service');
 const { autoAssignTicket, incrementWorkload, decrementWorkload } = require('../services/assignment.service');
 const { notifyTicketAssigned, notifyStatusChange, createNotification } = require('../services/notification.service');
-const { sendTicketConfirmation, sendStatusUpdate, sendStatusChangeEmail, sendAckEmail } = require('../services/email.service');
+const { sendTicketConfirmation, sendStatusUpdate, sendStatusChangeEmail, sendResolveEmail, sendAckEmail } = require('../services/email.service');
 const { emitToUser, emitToRole, emitToTicket } = require('../config/socket');
 
 // @desc    Create ticket
@@ -239,8 +239,8 @@ const getTicket = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    // Increment view count
-    await Ticket.findByIdAndUpdate(req.params.id, { $inc: { viewCount: 1 } });
+    // Increment view count (Non-blocking for faster response)
+    Ticket.findByIdAndUpdate(req.params.id, { $inc: { viewCount: 1 } }).exec().catch(err => console.error('View count update failed:', err.message));
 
     res.json({ success: true, ticket });
   } catch (err) {
@@ -429,6 +429,10 @@ const reopenTicket = async (req, res, next) => {
       });
     }
 
+    // Send email to creator about reopening
+    await ticket.populate('createdBy', 'name email');
+    sendStatusChangeEmail({ to: ticket.createdBy.email, name: ticket.createdBy.name, ticket, newStatus: 'reopened' }).catch(() => {});
+
     emitToTicket(ticket._id.toString(), 'ticket_reopened', { ticketId: ticket._id, reason });
 
     // Broadcast to role rooms so list pages update in real-time
@@ -595,7 +599,427 @@ const updateTicket = async (req, res, next) => {
     }
 
     await ticket.save();
+    
+    // Trigger email if status changed
+    if (status) {
+      await ticket.populate('createdBy', 'name email');
+      if (ticket.createdBy?.email) {
+        sendStatusChangeEmail({ to: ticket.createdBy.email, name: ticket.createdBy.name, ticket, newStatus: status }).catch(() => {});
+      }
+    }
+
     res.json({ success: true, message: 'Ticket updated', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Agent starts travel/work for on-site visit
+// @route   POST /api/tickets/:id/start-onsite
+// @access  Private (assigned agent)
+const startOnSite = async (req, res, next) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.assignedTo?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the assigned agent can start on-site visit' });
+    }
+
+    const user = await User.findById(req.user._id);
+    // Hard Rule: Only one active on-site allowed
+    if (user.liveStatus === 'on_site' && user.onSiteTicket && user.onSiteTicket.toString() !== ticket._id.toString()) {
+       // Check if the ticket referenced still exists and is not resolved
+       const otherTicket = await Ticket.findById(user.onSiteTicket);
+       if (otherTicket && !['resolved', 'closed'].includes(otherTicket.status)) {
+         return res.status(400).json({ 
+           success: false, 
+           message: `You are already on-site for ticket ${otherTicket.ticketId}. Please resolve it before starting another on-site visit.` 
+         });
+       }
+    }
+
+    // Update User Status
+    user.liveStatus = 'on_site';
+    user.onSiteTicket = ticket._id;
+    user.lastStatusUpdate = new Date();
+    await user.save();
+
+    // Update Ticket
+    if (!ticket.onSiteVisit.requestedAt) {
+      ticket.onSiteVisit.requestedAt = new Date();
+    }
+    
+    // Also move status to in_progress if it isn't already
+    if (ticket.status === 'assigned' || ticket.status === 'open') {
+        const oldStatus = ticket.status;
+        ticket.status = 'in_progress';
+        ticket.statusHistory.push({ from: oldStatus, to: 'in_progress', changedBy: req.user._id, reason: 'Started on-site visit' });
+    }
+    await ticket.save();
+
+    // Notify admins for live dashboard
+    emitToRole('admin', 'agent_status_updated', {
+      agentId: user._id,
+      name: user.name,
+      status: 'on_site',
+      ticketId: ticket.ticketId,
+      ticketDbId: ticket._id,
+      timestamp: user.lastStatusUpdate
+    });
+
+    res.json({ success: true, message: 'On-site visit started. Live timer active on dashboard.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Agent marks themselves as arrived on-site
+// @route   POST /api/tickets/:id/arrive
+// @access  Private (assigned agent)
+const markArrived = async (req, res, next) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id).populate('createdBy assignedTo');
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.assignedTo?._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the assigned agent can mark arrival' });
+    }
+
+    ticket.onSiteVisit.arrivedAt = new Date();
+    // Start the timer if they forgot to click "Start"
+    if (!ticket.onSiteVisit.requestedAt) ticket.onSiteVisit.requestedAt = new Date();
+    
+    // Arrival records: Agent is now at target location and available for work/resolutions
+    const user = await User.findById(req.user._id);
+    user.liveStatus = 'available';
+    user.onSiteTicket = null;
+    user.lastStatusUpdate = new Date();
+    await user.save();
+    
+    emitToRole('admin', 'agent_status_updated', {
+      agentId: user._id,
+      name: user.name,
+      status: 'available',
+      ticketId: ticket.ticketId,
+      ticketDbId: ticket._id,
+      timestamp: user.lastStatusUpdate
+    });
+
+    // Location Verification (Hard Rule)
+    if (ticket.createdBy?.location?.branch && req.user.location?.branch && 
+        ticket.createdBy.location.branch !== req.user.location.branch) {
+      ticket.onSiteVisit.locationVerified = false;
+      emitToRole('admin', 'location_mismatch_alert', {
+        ticketId: ticket.ticketId,
+        agentName: req.user.name,
+        agentBranch: req.user.location.branch,
+        employeeBranch: ticket.createdBy.location.branch,
+        timestamp: new Date()
+      });
+    } else {
+      ticket.onSiteVisit.locationVerified = true;
+    }
+
+    await ticket.save();
+
+    // Notify employee to confirm arrival
+    createNotification({
+      recipientId: ticket.createdBy._id,
+      type: 'arrival_verification',
+      title: 'Agent Arrived',
+      message: `${req.user.name} has marked themselves as arrived for your ticket. Please confirm if they are with you.`,
+      ticketId: ticket._id,
+      triggeredById: req.user._id,
+      link: `/tickets/${ticket._id}`
+    });
+
+    emitToTicket(ticket._id.toString(), 'agent_arrived', { 
+      agentId: req.user._id, 
+      name: req.user.name,
+      arrivedAt: ticket.onSiteVisit.arrivedAt
+    });
+
+    res.json({ success: true, message: 'Arrival recorded. Waiting for employee confirmation.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Employee confirms agent's arrival
+// @route   POST /api/tickets/:id/confirm-arrival
+// @access  Private (ticket creator)
+const confirmArrival = async (req, res, next) => {
+  try {
+    const { confirmed } = req.body; // true or false
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the ticket creator can confirm arrival' });
+    }
+
+    ticket.onSiteVisit.arrivalConfirmedByEmployee = confirmed;
+    
+    // If disputed, notify admin
+    if (!confirmed) {
+      emitToRole('admin', 'arrival_disputed', {
+        ticketId: ticket._id,
+        ticketNumber: ticket.ticketId,
+        agentId: ticket.assignedTo,
+        employeeName: req.user.name
+      });
+    }
+
+    await ticket.save();
+    emitToTicket(ticket._id.toString(), 'arrival_confirmed', { confirmed, confirmedBy: req.user.name });
+
+    res.json({ success: true, message: confirmed ? 'Arrival confirmed. Verified log started.' : 'Dispute recorded. Admin has been notified.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Agent marks work as resolved (Stage 1: Request Confirmation)
+// @route   POST /api/tickets/:id/agent-resolve
+// @access  Private (assigned agent)
+const agentResolve = async (req, res, next) => {
+  try {
+    const { notes, type } = req.body;
+    if (!notes) return res.status(400).json({ success: false, message: 'Resolution summary is required for accountability.' });
+    if (!type) return res.status(400).json({ success: false, message: 'Resolution type is required.' });
+
+    const ticket = await Ticket.findById(req.params.id).populate('createdBy');
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.assignedTo?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the assigned agent can mark as resolved' });
+    }
+
+    const oldStatus = ticket.status;
+    ticket.status = 'pending_confirmation';
+    ticket.resolution = { 
+      notes, 
+      type,
+      pendingConfirmationAt: new Date(), 
+      resolvedBy: req.user._id 
+    };
+    
+    ticket.statusHistory.push({ 
+      from: oldStatus, 
+      to: 'pending_confirmation', 
+      changedBy: req.user._id, 
+      reason: 'Agent requested resolution confirmation' 
+    });
+
+    // Update agent visit status
+    if (ticket.onSiteVisit.arrivedAt) {
+      ticket.onSiteVisit.visitResolvedAt = new Date();
+    }
+
+    // Release agent's live status/lock so they can move to the next thing
+    const agent = await User.findById(req.user._id);
+    if (agent && agent.onSiteTicket?.toString() === ticket._id.toString()) {
+      agent.liveStatus = 'available';
+      agent.onSiteTicket = null;
+      await agent.save();
+    }
+    
+    await ticket.save();
+
+    // Trigger employee sign-off notification
+    createNotification({
+      recipientId: ticket.createdBy._id,
+      type: 'resolution_verification',
+      title: 'Action Needed: Verify Fix',
+      message: `${req.user.name} has marked your ticket ${ticket.ticketId} as resolved. Please verify if the issue is fixed.`,
+      ticketId: ticket._id,
+      triggeredById: req.user._id,
+      link: `/tickets/${ticket._id}`,
+      resolutionSummary: notes // Optional field for UI
+    });
+    
+    // Notify employee via email to verify the fix
+    if (ticket.createdBy?.email) {
+      sendStatusChangeEmail({ 
+        to: ticket.createdBy.email, 
+        name: ticket.createdBy.name, 
+        ticket, 
+        newStatus: 'resolved' 
+      }).catch(err => console.error('Failed to send verification request email:', err.message));
+    }
+
+    emitToTicket(ticket._id.toString(), 'agent_resolved_request', { notes, type });
+
+    res.json({ success: true, message: 'Resolution request submitted. Awaiting employee confirmation.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Agent withdraws resolution request
+// @route   POST /api/tickets/:id/withdraw-resolve
+// @access  Private (assigned agent)
+const withdrawResolve = async (req, res, next) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.assignedTo?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the assigned agent can withdraw resolution request' });
+    }
+
+    if (ticket.status !== 'pending_confirmation') {
+      return res.status(400).json({ success: false, message: 'Ticket is not in pending confirmation state.' });
+    }
+
+    ticket.status = 'in_progress';
+    ticket.statusHistory.push({ 
+      from: 'pending_confirmation', 
+      to: 'in_progress', 
+      changedBy: req.user._id, 
+      reason: 'Agent withdrew resolution request' 
+    });
+    
+    // Clear the pending request data partially
+    ticket.resolution.pendingConfirmationAt = null;
+    
+    await ticket.save();
+    emitToTicket(ticket._id.toString(), 'resolve_withdrawn', { by: req.user.name });
+
+    res.json({ success: true, message: 'Resolution request withdrawn. Ticket is back in-progress.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Employee responds to resolution request (Stage 2: Confirm or Reject)
+// @route   POST /api/tickets/:id/confirm-fix
+// @access  Private (ticket creator)
+const confirmFix = async (req, res, next) => {
+  try {
+    const { fixed, rating, comment, reason } = req.body; // fixed: true/false
+    const ticket = await Ticket.findById(req.params.id).populate('assignedTo');
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the ticket creator can verify resolution' });
+    }
+
+    if (fixed) {
+      // 4A: Employee Confirms Fixed
+      ticket.status = 'closed';
+      ticket.resolution.resolvedAt = new Date();
+      ticket.onSiteVisit.completionConfirmedByEmployee = true;
+      ticket.statusHistory.push({ from: 'pending_confirmation', to: 'closed', changedBy: req.user._id, reason: 'Employee confirmed fix' });
+      
+      // Save feedback
+      ticket.feedback = {
+        rating: rating || 5,
+        comment: comment || '',
+        submittedAt: new Date()
+      };
+
+      // Update stats and workload
+      if (ticket.assignedTo) {
+        const agentId = ticket.assignedTo._id;
+        await decrementWorkload(agentId);
+        
+        // Update agent metrics & release on-site status
+        const agent = await User.findById(agentId);
+        if (agent) {
+          const totalResolved = (agent.stats?.totalResolved || 0) + 1;
+          const currentAvgRating = agent.stats?.avgRating || 0;
+          const newAvgRating = ((currentAvgRating * (totalResolved - 1)) + (rating || 5)) / totalResolved;
+          
+          agent.stats = {
+            ...agent.stats,
+            totalResolved,
+            avgRating: parseFloat(newAvgRating.toFixed(1))
+          };
+
+          // If they were on-site for this specific ticket, set them free
+          if (agent.liveStatus === 'on_site' && agent.onSiteTicket?.toString() === ticket._id.toString()) {
+            agent.liveStatus = 'available';
+            agent.onSiteTicket = null;
+          }
+          
+          await agent.save();
+        }
+      }
+
+      // Notify final resolution via email (celebratory)
+      await ticket.populate('createdBy', 'name email');
+      if (ticket.createdBy?.email) {
+        sendResolveEmail({ 
+          to: ticket.createdBy.email, 
+          name: ticket.createdBy.name, 
+          ticket 
+        }).catch(err => console.error('Failed to send final resolution email:', err.message));
+      }
+    } else {
+      // 4B: Employee Rejects Fix
+      ticket.status = 'reopened';
+      ticket.onSiteVisit.completionConfirmedByEmployee = false;
+      ticket.reopenCount = (ticket.reopenCount || 0) + 1;
+      ticket.reopenReason = reason || 'Still having problem';
+      ticket.lastReopenedAt = new Date();
+      ticket.statusHistory.push({ from: 'pending_confirmation', to: 'reopened', changedBy: req.user._id, reason: `Fix rejected: ${reason}` });
+      
+      // Clear pending resolution request to allow new one later
+      ticket.resolution.pendingConfirmationAt = null;
+
+      // Notify Agent
+      if (ticket.assignedTo) {
+        createNotification({
+          recipientId: ticket.assignedTo._id,
+          type: 'resolution_rejected',
+          title: 'Resolution Rejected',
+          message: `Ticket ${ticket.ticketId} was rejected by the employee. Reason: ${reason}`,
+          ticketId: ticket._id,
+          triggeredById: req.user._id,
+          link: `/tickets/${ticket._id}`
+        });
+      }
+
+      // Alert Admin
+      emitToRole('admin', 'fix_disputed', { 
+        ticketId: ticket.ticketId, 
+        agent: ticket.assignedTo?.name,
+        reason: reason
+      });
+    }
+
+    await ticket.save();
+
+    // If fully closed or reopened, we should handle the agent's live status
+    if (ticket.assignedTo) {
+      const user = await User.findById(ticket.assignedTo._id);
+      if (user && user.onSiteTicket?.toString() === ticket._id.toString()) {
+        // Only mark available if fixed. If reopened, stay on_site? 
+        // User says: "Ticket re-enters agent's queue". 
+        // If they were on-site, they might still be there or might have left.
+        // For simplicity, we clear on-site ticket on closure. 
+        // If rejected, agent is still assigned but not necessarily physically on-site anymore according to the system state.
+        if (fixed) {
+           user.liveStatus = 'available';
+           user.onSiteTicket = null;
+           user.lastStatusUpdate = new Date();
+           await user.save();
+
+           emitToRole('admin', 'agent_status_updated', {
+             agentId: user._id,
+             name: user.name,
+             status: 'available',
+             timestamp: user.lastStatusUpdate
+           });
+        }
+      }
+    }
+
+    emitToTicket(ticket._id.toString(), 'fix_verified', { fixed, rating, comment, reason, confirmedBy: req.user.name });
+
+    res.json({ success: true, message: fixed ? 'Ticket successfully resolved and verified.' : 'Ticket reopened. Admin has been notified of the dispute.', ticket });
   } catch (err) {
     next(err);
   }
@@ -604,5 +1028,7 @@ const updateTicket = async (req, res, next) => {
 module.exports = {
   createTicket, getTickets, getTicket, updateStatus,
   assignTicket, reopenTicket, submitFeedback,
-  suggestPriority, findSimilarTickets, updatePriority, deleteTicket, updateTicket
+  suggestPriority, findSimilarTickets, updatePriority, deleteTicket, updateTicket,
+  markArrived, confirmArrival, agentResolve, confirmFix,
+  startOnSite, withdrawResolve
 };

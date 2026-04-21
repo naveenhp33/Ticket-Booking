@@ -17,7 +17,14 @@ export const ticketService = {
   createReassignRequest: (id, data) => api.post(`/tickets/${id}/reassign-request`, data),
   getReassignRequests: (params) => api.get('/tickets/reassign/requests', { params }),
   processReassignRequest: (requestId, data) => api.patch(`/tickets/reassign/requests/${requestId}`, data),
-  updateTicket: (id, data) => api.patch(`/tickets/update-ticket/${id}`, data)
+  updateTicket: (id, data) => api.patch(`/tickets/update-ticket/${id}`, data),
+  // On-site Handshake
+  startOnSite: (id) => api.post(`/tickets/${id}/start-onsite`),
+  markArrived: (id) => api.post(`/tickets/${id}/arrive`),
+  confirmArrival: (id, confirmed) => api.post(`/tickets/${id}/confirm-arrival`, { confirmed }),
+  agentResolve: (id, data) => api.post(`/tickets/${id}/agent-resolve`, data),
+  withdrawResolve: (id) => api.post(`/tickets/${id}/withdraw-resolve`),
+  confirmFix: (id, data) => api.post(`/tickets/${id}/confirm-fix`, data)
 };
 
 export const emailService = {
@@ -50,7 +57,8 @@ export const userService = {
   update: (id, data) => api.put(`/users/${id}`, data),
   getStats: (id) => api.get(`/users/${id}/stats`),
   updateProfile: (data) => api.put('/auth/profile', data),
-  changePassword: (data) => api.put('/auth/change-password', data)
+  changePassword: (data) => api.put('/auth/change-password', data),
+  updateLiveStatus: (data) => api.put('/users/status', data)
 };
 
 export const knowledgeService = {

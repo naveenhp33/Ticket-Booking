@@ -17,6 +17,10 @@ const notFound = require('./middleware/notFound');
 // Prevent server crash on unhandled network/IMAP errors
 process.on('uncaughtException', (err) => {
   console.error('🔥 CRITICAL: Uncaught Exception:', err.message);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${process.env.PORT || 5000} is already in use. Killing process...`);
+    process.exit(1);
+  }
   if (err.code === 'ETIMEOUT') console.log('🛡️  Suppressed ETIMEOUT crash.');
 });
 
@@ -41,7 +45,7 @@ const server = http.createServer(app);
 initSocket(server);
 
 // Connect DB
-connectDB();
+// connectDB() was here, moved to line 137 to ensure services start after connection
 
 // Security middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -139,10 +143,15 @@ connectDB().then(() => {
   const hasGmailConfig = process.env.GMAIL_REFRESH_TOKEN && !process.env.GMAIL_REFRESH_TOKEN.includes('your_gmail');
   const hasImapConfig = process.env.IMAP_USER && !process.env.IMAP_USER.includes('itadmin@vdartinc.com');
   
+  const { startResolutionCron } = require('./services/resolutionCron.service');
+  
   if ((method === 'GMAIL' && hasGmailConfig) || (method === 'IMAP' && hasImapConfig) || (method === 'SMTP' && hasImapConfig)) {
     startEmailPoller();
     console.log(`📧 Email poller started (Method: ${method === 'SMTP' ? 'IMAP (via SMTP settings)' : method})`);
   }
+
+  // Start the 24h auto-close checker
+  startResolutionCron();
   
   // RUN SYSTEM SANITY CHECKS (Refactored logic from legacy utility scripts)
   const User = require('./models/User.model');
@@ -176,6 +185,13 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`\n🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
   console.log(`📡 Socket.io initialized`);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is in use. Please close other instances or kill the process.`);
+    process.exit(1);
+  }
 });
 
 module.exports = { app, server };

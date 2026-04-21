@@ -118,6 +118,8 @@ const createTicketFromEmail = async (emailData) => {
     urgencyLevel: 'flexible',
     createdBy: senderUser._id,
     status: 'open',
+    preferredContact: 'email',
+    firstResponseAt: new Date(),
     sla: {
       deadline: slaDeadline,
       responseDeadline,
@@ -322,7 +324,7 @@ const pollImap = async () => {
     }
     await client.logout();
   } catch (err) {
-    console.error('❌ IMAP Connection Error:', err.message);
+    console.error('❌ IMAP Connection Error:', err);
     try {
       if (client.usable) await client.logout();
     } catch(e) {}

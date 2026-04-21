@@ -95,7 +95,7 @@ const getAdminDashboard = async (req, res, next) => {
       statusCounts, priorityCounts, slaBreached,
       topAgents, categoryBreakdown, criticalTickets,
       last7DaysTrend, slaAlerts, totalUsers, avgResolution,
-      pendingReassignRequests
+      pendingReassignRequests, pendingConfirmationTickets
     ] = await Promise.all([
       Ticket.aggregate([
         { $match: matchBase },
@@ -157,7 +157,12 @@ const getAdminDashboard = async (req, res, next) => {
           },
           { $group: { _id: null, avg: { $avg: '$resolutionTime' } } }
         ]),
-        isAgent ? Promise.resolve(0) : ReassignRequest.countDocuments({ status: 'pending' })
+        isAgent ? Promise.resolve(0) : ReassignRequest.countDocuments({ status: 'pending' }),
+        Ticket.find({ ...matchBase, status: 'pending_confirmation' })
+          .limit(10)
+          .populate('createdBy assignedTo', 'name')
+          .select('ticketId title status category createdAt assignedTo resolution')
+          .lean()
       ]);
   
       const statusMap = {};
@@ -173,6 +178,7 @@ const getAdminDashboard = async (req, res, next) => {
           open: statusMap.open || 0,
           assigned: statusMap.assigned || 0,
           in_progress: statusMap.in_progress || 0,
+          pending_confirmation: statusMap.pending_confirmation || 0,
           resolved: (statusMap.resolved || 0) + (statusMap.closed || 0),
           closed: statusMap.closed || 0,
           slaBreached,
@@ -184,7 +190,8 @@ const getAdminDashboard = async (req, res, next) => {
           last7DaysTrend: last7DaysTrend[0],
           slaAlerts,
           avgResolutionHours: avgResolution[0]?.avg?.toFixed(1) || 0,
-          pendingReassignRequests: pendingReassignRequests
+          pendingReassignRequests,
+          pendingConfirmationTickets
         }
       });
   } catch (err) {

@@ -3,7 +3,8 @@ const router = express.Router();
 const {
   createTicket, getTickets, getTicket, updateStatus,
   assignTicket, reopenTicket, submitFeedback,
-  suggestPriority, findSimilarTickets, updatePriority, deleteTicket, updateTicket
+  suggestPriority, findSimilarTickets, updatePriority, deleteTicket, updateTicket,
+  markArrived, confirmArrival, agentResolve, confirmFix, startOnSite, withdrawResolve
 } = require('../controllers/ticket.controller');
 const {
   createReassignRequest, getReassignRequests, processReassignRequest
@@ -34,5 +35,13 @@ router.patch('/update-ticket/:id', protect, authorize('admin'), updateTicket);
 router.post('/:id/reassign-request', protect, authorize('support_agent'), createReassignRequest);
 router.get('/reassign/requests', protect, authorize('admin'), getReassignRequests);
 router.patch('/reassign/requests/:requestId', protect, authorize('admin'), processReassignRequest);
+
+// On-site Handshake Routes
+router.post('/:id/start-onsite', protect, authorize('support_agent', 'admin'), startOnSite);
+router.post('/:id/arrive', protect, authorize('support_agent', 'admin'), markArrived);
+router.post('/:id/confirm-arrival', protect, confirmArrival);
+router.post('/:id/agent-resolve', protect, authorize('support_agent', 'admin'), agentResolve);
+router.post('/:id/withdraw-resolve', protect, authorize('support_agent', 'admin'), withdrawResolve);
+router.post('/:id/confirm-fix', protect, confirmFix);
 
 module.exports = router;

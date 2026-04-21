@@ -21,7 +21,7 @@ export const SocketProvider = ({ children }) => {
     }
 
     const token = localStorage.getItem('token');
-    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
+    const socket = io('http://localhost:5001', {
       auth: { token },
       transports: ['websocket'],
       reconnectionAttempts: 5,

@@ -78,6 +78,7 @@ export default function LoginPage() {
                 placeholder="name@vdartinc.com" 
                 value={form.email} 
                 onChange={e => setForm({...form, email: e.target.value})}
+                autoComplete="username"
                 leftIcon={<Mail size={18} />}
               />
               
@@ -88,6 +89,7 @@ export default function LoginPage() {
                   placeholder="••••••••" 
                   value={form.password} 
                   onChange={e => setForm({...form, password: e.target.value})}
+                  autoComplete="current-password"
                   leftIcon={<Lock size={18} />}
                 />
                 <div style={{ textAlign: 'right' }}>

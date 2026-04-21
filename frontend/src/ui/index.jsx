@@ -6,6 +6,7 @@ export const Button = ({
   variant = 'primary', 
   size = 'md', 
   isLoading, 
+  fullWidth,
   leftIcon, 
   rightIcon, 
   className = '', 
@@ -27,7 +28,7 @@ export const Button = ({
 
   return (
     <button 
-      className={`btn ${variants[variant]} ${sizes[size]} ${className} ${isLoading ? 'btn-loading' : ''}`}
+      className={`btn ${variants[variant]} ${sizes[size]} ${fullWidth ? 'w-full' : ''} ${className} ${isLoading ? 'btn-loading' : ''}`}
       disabled={isLoading || props.disabled}
       {...props}
     >

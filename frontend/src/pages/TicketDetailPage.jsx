@@ -37,7 +37,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function TicketDetailPage() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { on, joinTicket, leaveTicket } = useSocket();
   const toast = useToast();
   const navigate = useNavigate();
@@ -60,6 +60,15 @@ export default function TicketDetailPage() {
   const [ackSent, setAckSent] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [ackTimer, setAckTimer] = useState(null); // seconds remaining for 15-min ack
+
+  const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false);
+  const [resType, setResType] = useState('on_site_fix');
+  const [resNotes, setResNotes] = useState('');
+  
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+
   const timerRef = useRef(null);
 
   const isAdmin = user?.role === 'admin';
@@ -79,7 +88,7 @@ export default function TicketDetailPage() {
 
   // 15-min ack countdown (admin only, open tickets)
   useEffect(() => {
-    if (!ticket || !isAdmin) return;
+    if (!ticket || !isAdmin || ticket.emailSource) return;
     if (['resolved', 'closed'].includes(ticket.status)) return;
     if (ticket.firstResponseAt) { setAckSent(true); return; }
 
@@ -203,23 +212,26 @@ export default function TicketDetailPage() {
     }
   };
 
-  const fetchTicket = async () => {
+  const fetchTicket = () => fetchAllData();
+  const fetchComments = () => fetchAllData();
+
+  const fetchAllData = async () => {
     try {
-      const res = await ticketService.getOne(id);
-      setTicket(res.data.ticket);
+      if (!ticket) setLoading(true);
+      const [ticketRes, commentsRes] = await Promise.all([
+        ticketService.getOne(id),
+        commentService.getAll(id)
+      ]);
+      setTicket(ticketRes.data.ticket);
+      setComments(commentsRes.data.comments || []);
+      
+      if (isAdminOrAgent) fetchAgents();
     } catch (err) {
-      toast.error('Ticket not found');
-      navigate('/tickets');
+      toast.error('Failed to load data');
+      if (!ticket) navigate('/tickets');
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchComments = async () => {
-    try {
-      const res = await commentService.getAll(id);
-      setComments(res.data.comments || []);
-    } catch {}
   };
 
   const handlePostComment = async (e) => {
@@ -247,7 +259,6 @@ export default function TicketDetailPage() {
   const STATUS_OPTIONS = [
     { value: 'in_progress',     label: ' Working on it',  color: '#2563EB' },
     { value: 'almost_complete', label: ' Almost done',    color: '#7C3AED' },
-    { value: 'resolved',        label: ' Fixed / Resolved', color: '#059669' },
   ];
 
   const handleStatusChange = async (newStatus) => {
@@ -266,19 +277,95 @@ export default function TicketDetailPage() {
     }
   };
 
-  const handleResolve = async () => {
+  const handleResolveRequest = async () => {
+    if (!resNotes.trim()) return toast.error('Please provide a resolution summary.');
     setIsResolving(true);
     try {
-      await ticketService.updateStatus(id, { 
-        status: 'resolved',
-        resolution: { notes: 'Issue has been addressed and resolved.' }
+      await ticketService.agentResolve(id, { 
+        notes: resNotes,
+        type: resType
       });
-      toast.success('Ticket resolved successfully!');
+      updateUser({ liveStatus: 'available' });
+      toast.success('Resolution request submitted! Waiting for employee confirmation.');
+      setIsResolutionModalOpen(false);
+      setResNotes('');
       fetchTicket();
     } catch (err) {
-      toast.error('Failed to resolve ticket');
+      toast.error(err.response?.data?.message || 'Failed to submit resolution');
     } finally {
       setIsResolving(false);
+    }
+  };
+
+  const handleWithdrawResolve = async () => {
+    try {
+      await ticketService.withdrawResolve(id);
+      toast.success('Resolution request withdrawn.');
+      fetchTicket();
+    } catch (err) {
+      toast.error('Failed to withdraw request');
+    }
+  };
+
+  const handleConfirmFix = async (fixed) => {
+    try {
+      if (fixed) {
+        await ticketService.confirmFix(id, { 
+          fixed: true, 
+          rating, 
+          comment: feedbackText 
+        });
+        toast.success('Great! Issue closed and resolved.');
+        setIsFeedbackModalOpen(false);
+      } else {
+        if (!rejectionReason.trim()) return toast.error('Please provide a reason for rejection.');
+        await ticketService.confirmFix(id, { 
+          fixed: false, 
+          reason: rejectionReason 
+        });
+        toast.success('Ticket reopened. Agent notified.');
+        setIsRejectionModalOpen(false);
+      }
+      fetchTicket();
+    } catch (err) {
+      toast.error('Failed to update resolution status');
+    }
+  };
+
+  const handleStartOnSite = async () => {
+    try {
+      await ticketService.startOnSite(id);
+      updateUser({ liveStatus: 'on_site' });
+      toast.success('On-site visit started. Good luck!');
+      fetchTicket();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to start on-site');
+    }
+  };
+
+  const handleMarkArrived = async () => {
+    try {
+      await ticketService.markArrived(id);
+      updateUser({ liveStatus: 'available' });
+      toast.success('Arrival recorded. You are now available for next resolutions.');
+      fetchTicket();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to record arrival');
+    }
+  };
+
+// Placeholder for simplified agent actions if needed
+  const handleAgentResolve = async () => {
+     setIsResolutionModalOpen(true);
+  };
+
+  const handleConfirmArrival = async (confirmed) => {
+    try {
+      await ticketService.confirmArrival(id, confirmed);
+      toast.success(confirmed ? 'Arrival confirmed!' : 'Dispute recorded. Admin notified.');
+      fetchTicket();
+    } catch (err) {
+      toast.error('Failed to confirm arrival');
     }
   };
 
@@ -321,7 +408,33 @@ export default function TicketDetailPage() {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return (
+    <div className="page-layout animate-pulse" style={{ padding: '40px' }}>
+       {/* Breadcrumb Skeleton */}
+       <div style={{ height: '32px', width: '200px', marginBottom: '24px' }} className="skeleton" />
+       
+       {/* Title Skeleton */}
+       <div style={{ height: '60px', width: '60%', marginBottom: '40px' }} className="skeleton" />
+       
+       {/* Road Map Skeleton */}
+       <div style={{ height: '140px', width: '100%', marginBottom: '40px', borderRadius: '24px' }} className="skeleton" />
+       
+       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '32px' }}>
+          <div className="flex-col gap-6">
+             {/* Main Card Skeleton */}
+             <div style={{ height: '280px', width: '100%', borderRadius: '24px' }} className="skeleton" />
+             {/* Comments Skeleton */}
+             <div style={{ height: '400px', width: '100%', borderRadius: '24px' }} className="skeleton" />
+          </div>
+          <div className="flex-col gap-6">
+             {/* Properties Card Skeleton */}
+             <div style={{ height: '350px', width: '100%', borderRadius: '24px' }} className="skeleton" />
+             {/* Activity Log Skeleton */}
+             <div style={{ height: '250px', width: '100%', borderRadius: '24px' }} className="skeleton" />
+          </div>
+       </div>
+    </div>
+  );
   if (!ticket) return null;
 
   const isTicketOpen = !['resolved', 'closed'].includes(ticket.status);
@@ -333,9 +446,15 @@ export default function TicketDetailPage() {
     { value: 'assigned',         label: 'Assigned',        icon: <UserCheck size={16} /> },
     { value: 'in_progress',      label: 'Working on it',   icon: <Hammer size={16} /> },
     { value: 'almost_complete',  label: 'Almost done',     icon: <Sparkles size={16} /> },
-    { value: 'resolved',         label: 'Fixed!',          icon: <Trophy size={16} /> },
+    { value: 'closed',           label: 'Complete',        icon: <Trophy size={16} /> },
   ];
-  const currentStep = STATUS_PROGRESS.findIndex(s => s.value === ticket.status);
+  const currentStatus = 
+    ticket.status === 'pending_confirmation' ? 'almost_complete' : 
+    ticket.status === 'reopened' ? 'in_progress' : 
+    ticket.status === 'resolved' ? 'closed' : 
+    ticket.status;
+  
+  const currentStep = STATUS_PROGRESS.findIndex(s => s.value === currentStatus);
   const progressPct = currentStep < 0 ? 0 : Math.round((currentStep / (STATUS_PROGRESS.length - 1)) * 100);
 
   return (
@@ -405,22 +524,34 @@ export default function TicketDetailPage() {
             </div>
           </div>
 
-          <div style={{ position: 'relative', padding: '10px 0 20px 0' }}>
-            {/* Background Track */}
-            <div style={{ position: 'absolute', top: '26px', left: '20px', right: '20px', height: '4px', background: '#F1F5F9', borderRadius: '4px' }} />
-            
-            {/* Active Progress Track with Glow */}
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `calc(${progressPct}% - 40px)` }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              style={{ 
-                position: 'absolute', top: '26px', left: '20px', height: '4px', 
-                background: 'linear-gradient(90deg, #3B82F6 0%, #2DD4BF 100%)', 
-                borderRadius: '4px', zIndex: 1,
-                boxShadow: '0 0 12px rgba(59, 130, 246, 0.5)'
-              }} 
-            />
+          <div style={{ position: 'relative', padding: '20px 0 30px 0' }}>
+            {/* Background Track Container */}
+            <div style={{ position: 'absolute', top: '38px', left: '50px', right: '50px', height: '6px', zIndex: 1 }}>
+              {/* Background Gray Line */}
+              <div style={{ width: '100%', height: '100%', background: '#F1F5F9', borderRadius: '10px', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)' }} />
+              
+              {/* Active Progress Line */}
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPct}%` }}
+                transition={{ duration: 1.2, ease: "circOut" }}
+                style={{ 
+                  position: 'absolute', top: 0, left: 0, height: '100%', 
+                  background: 'linear-gradient(90deg, #6366F1 0%, #06B6D4 100%)', 
+                  borderRadius: '10px',
+                  boxShadow: '0 0 15px rgba(99, 102, 241, 0.4)'
+                }} 
+              />
+
+              {/* Shimmer Effect */}
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'hidden', borderRadius: '10px', pointerEvents: 'none' }}>
+                <motion.div 
+                  animate={{ x: ['-100%', '100%'] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  style={{ width: '40%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }}
+                />
+              </div>
+            </div>
 
             {/* Step Indicators */}
             <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
@@ -430,28 +561,56 @@ export default function TicketDetailPage() {
                 const isFuture = i > currentStep;
 
                 return (
-                  <div key={s.value} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', width: '80px' }}>
-                    <motion.div
-                      whileHover={{ scale: 1.1 }}
-                      style={{
-                        width: '36px', height: '36px', borderRadius: '12px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: isActive ? 'white' : isCompleted ? '#3B82F6' : 'white',
-                        color: isActive ? '#3B82F6' : isCompleted ? 'white' : '#94A3B8',
-                        border: isActive ? '2px solid #3B82F6' : isCompleted ? 'none' : '1px solid #E2E8F0',
-                        boxShadow: isActive ? '0 0 20px rgba(59, 130, 246, 0.25)' : 'none',
+                  <div key={s.value} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', width: '100px' }}>
+                    <div style={{ position: 'relative' }}>
+                      {isActive && (
+                        <motion.div
+                          animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.1, 0.3] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          style={{
+                            position: 'absolute', top: '-6px', left: '-6px', right: '-6px', bottom: '-6px',
+                            background: '#6366F1', borderRadius: '14px'
+                          }}
+                        />
+                      )}
+                      
+                      <motion.div
+                        whileHover={{ y: -4, scale: 1.05 }}
+                        style={{
+                          width: '44px', height: '44px', borderRadius: '14px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: isCompleted ? '#6366F1' : isActive ? 'white' : 'white',
+                          color: isCompleted ? 'white' : isActive ? '#6366F1' : '#94A3B8',
+                          border: isActive ? '2.5px solid #6366F1' : '1px solid #E2E8F0',
+                          boxShadow: isActive ? '0 10px 25px -5px rgba(99, 102, 241, 0.4)' : isCompleted ? '0 4px 12px rgba(99, 102, 241, 0.2)' : 'none',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          cursor: 'default'
+                        }}
+                      >
+                        {isCompleted ? <BadgeCheck size={26} /> : s.icon}
+                      </motion.div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                      <span style={{ 
+                        fontSize: '0.85rem', fontWeight: isActive ? 900 : 700, 
+                        color: isActive ? '#4F46E5' : isFuture ? '#94A3B8' : '#1E293B',
+                        textAlign: 'center', whiteSpace: 'nowrap',
+                        letterSpacing: '-0.02em',
                         transition: 'all 0.3s ease'
-                      }}
-                    >
-                      {isCompleted ? <BadgeCheck size={20} /> : s.icon}
-                    </motion.div>
-                    <span style={{ 
-                      fontSize: '0.65rem', fontWeight: isActive ? 800 : 600, 
-                      color: isActive ? 'var(--primary)' : isFuture ? 'var(--text-dim)' : 'var(--text-main)',
-                      textAlign: 'center', whiteSpace: 'nowrap'
-                    }}>
-                      {s.label}
-                    </span>
+                      }}>
+                        {s.label}
+                      </span>
+                      {isActive && (
+                        <motion.span 
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          style={{ fontSize: '0.6rem', fontWeight: 800, color: '#06B6D4', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                        >
+                          Current Step
+                        </motion.span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -586,8 +745,8 @@ export default function TicketDetailPage() {
             <Button 
               size="md"
               leftIcon={<CheckCircle2 size={20} />} 
-              onClick={handleResolve} 
-              disabled={ticket.status === 'resolved'}
+              onClick={handleAgentResolve} 
+              disabled={ticket.status === 'resolved' || ticket.status === 'closed' || ticket.status === 'pending_confirmation'}
               isLoading={isResolving}
               style={{ padding: '0 24px', borderRadius: '14px', fontWeight: 800, fontSize: '0.95rem', boxShadow: '0 8px 20px -6px rgba(30, 64, 175, 0.4)' }}
             >
@@ -596,6 +755,106 @@ export default function TicketDetailPage() {
           )}
         </div>
       </div>
+
+      {/* On-Site Visit Workflow Hands-on Control — The Handshake Roadmap */}
+      {(isAssignedAgent || (user?._id === ticket.createdBy?._id) || isAdmin) && (
+        <Card style={{ 
+          marginBottom: 'var(--s-8)', padding: '24px', 
+          background: ticket.status === 'pending_confirmation' ? 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)' : 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)', 
+          border: '1px solid ' + (ticket.status === 'pending_confirmation' ? '#FDE68A' : '#BAE6FD'), borderRadius: '24px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
+        }}>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                 <div style={{ 
+                   width: '56px', height: '56px', background: 'white', border: '2px solid #3B82F6', 
+                   borderRadius: '18px', display: 'flex', alignItems: 'center', 
+                   justifyContent: 'center', color: '#3B82F6', position: 'relative'
+                 }}>
+                   {ticket.status === 'pending_confirmation' ? <Clock size={28} color="#D97706" /> : <Shield size={28} />}
+                   {ticket.onSiteVisit?.arrivedAt && <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#10B981', borderRadius: '50%', padding: '2px', color: 'white' }}><CheckCircle2 size={12} /></div>}
+                 </div>
+                 <div>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: ticket.status === 'pending_confirmation' ? '#92400E' : '#0C4A6E' }}>
+                        {ticket.status === 'pending_confirmation' ? 'Resolution Verification Protocol' : 'On-Site Accountability Protocol'}
+                    </h3>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: ticket.status === 'pending_confirmation' ? '#B45309' : '#0369A1', fontWeight: 600 }}>
+                       {isAssignedAgent ? (
+                         ticket.status === 'pending_confirmation' ? `Awaiting Employee Confirmation (Waiting ${timeAgo(ticket.resolution?.pendingConfirmationAt)}). Auto-closes in 24h.` :
+                         ticket.onSiteVisit?.arrivalConfirmedByEmployee ? "Arrived & Verified. You are currently working on-site." :
+                         ticket.onSiteVisit?.arrivedAt ? "Arrival recorded. Waiting for employee to confirm you are there." :
+                         ticket.onSiteVisit?.requestedAt ? "Travel in progress. Click 'Arrive' once you reach the location." :
+                         "Heading to the location? Start the visit protocol below."
+                       ) : (
+                         ticket.status === 'pending_confirmation' ? "The agent claims it's fixed. Please verify the solution!" :
+                         ticket.onSiteVisit?.arrivedAt && !ticket.onSiteVisit?.arrivalConfirmedByEmployee ? "Agent says they have arrived. Are they with you?" :
+                         ticket.onSiteVisit?.arrivalConfirmedByEmployee ? "Agent is currently working on your issue." :
+                         ticket.onSiteVisit?.requestedAt ? "Agent is on their way to your location." :
+                         "Support may need to visit your location for this issue."
+                       )}
+                    </p>
+                 </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                 {isAssignedAgent ? (
+                   <>
+                     {ticket.status === 'pending_confirmation' ? (
+                       <Button size="sm" variant="ghost" onClick={handleWithdrawResolve} style={{ color: '#B45309' }}>Withdraw Resolution</Button>
+                     ) : (
+                       <>
+                         {!ticket.onSiteVisit?.requestedAt && (
+                           <Button 
+                             onClick={handleStartOnSite} 
+                             leftIcon={<Activity size={18} />}
+                             disabled={ticket.status === 'resolved' || ticket.status === 'closed'}
+                           >
+                             Go On-Site
+                           </Button>
+                         )}
+                         {ticket.onSiteVisit?.requestedAt && !ticket.onSiteVisit?.arrivedAt && (
+                           <Button 
+                             onClick={handleMarkArrived} 
+                             variant="warning" 
+                             leftIcon={<BadgeCheck size={18} />}
+                             disabled={ticket.status === 'resolved' || ticket.status === 'closed'}
+                           >
+                             I Have Arrived
+                           </Button>
+                         )}
+                         {ticket.onSiteVisit?.arrivedAt && !ticket.onSiteVisit?.visitResolvedAt && (
+                           <Button 
+                             onClick={() => setIsResolutionModalOpen(true)} 
+                             variant="success" 
+                             leftIcon={<Trophy size={18} />}
+                             disabled={ticket.status === 'resolved' || ticket.status === 'closed' || ticket.status === 'pending_confirmation'}
+                           >
+                             Resolve Issue
+                           </Button>
+                         )}
+                       </>
+                     )}
+                   </>
+                 ) : user?._id === ticket.createdBy?._id ? (
+                   <>
+                     {ticket.onSiteVisit?.arrivedAt && !ticket.onSiteVisit?.arrivalConfirmedByEmployee && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                           <Button size="sm" onClick={() => handleConfirmArrival(true)} variant="success">Yes, Agent Arrived</Button>
+                           <Button size="sm" onClick={() => handleConfirmArrival(false)} variant="danger">No, Not Here</Button>
+                        </div>
+                     )}
+                     {ticket.status === 'pending_confirmation' && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                           <Button size="sm" onClick={() => setIsFeedbackModalOpen(true)} variant="success" leftIcon={<CheckCircle2 size={16} />}>Yes, Issue is Fixed</Button>
+                           <Button size="sm" onClick={() => setIsRejectionModalOpen(true)} variant="danger" leftIcon={<Lock size={16} />}>No, Still Problem</Button>
+                        </div>
+                     )}
+                   </>
+                 ) : null}
+              </div>
+           </div>
+        </Card>
+      )}
 
       <div className="ticket-detail-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '32px', alignItems: 'start' }}>
         <div className="flex-col gap-6">
@@ -724,19 +983,45 @@ export default function TicketDetailPage() {
               </div>
 
               {/* Row: Priority */}
-              <div className="flex-between">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   <ShieldCheck size={14} /> Intensity
                 </span>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    <div style={{ width: '40px', height: '6px', borderRadius: '4px', background: ticket.priority === 'low' ? 'var(--success)' : '#E2E8F0' }} />
-                    <div style={{ width: '40px', height: '6px', borderRadius: '4px', background: (ticket.priority === 'medium' || ticket.priority === 'high' || ticket.priority === 'critical') ? (ticket.priority === 'medium' ? 'var(--primary)' : 'var(--warning)') : '#E2E8F0' }} />
-                    <div style={{ width: '40px', height: '6px', borderRadius: '4px', background: (ticket.priority === 'high' || ticket.priority === 'critical') ? 'var(--danger)' : '#E2E8F0' }} />
-                    <span style={{ marginLeft: '8px', fontWeight: 800, fontSize: '0.8rem', color: 'var(--text-main)', textTransform: 'capitalize' }}>{ticket.priority}</span>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginLeft: 'auto' }}>
+                  {[
+                    { key: 'low',      color: '#10B981' },
+                    { key: 'medium',   color: '#3B82F6' },
+                    { key: 'high',     color: '#F59E0B' },
+                    { key: 'critical', color: '#EF4444' }
+                  ].map((level, idx, arr) => {
+                    const currentPriorityIdx = arr.findIndex(l => l.key === ticket.priority);
+                    const isActive = idx <= currentPriorityIdx;
+                    const activeColor = arr[currentPriorityIdx]?.color || '#E2E8F0';
+                    
+                    return (
+                      <div 
+                        key={level.key}
+                        style={{ 
+                          width: '20px', height: '6px', borderRadius: '2px', 
+                          background: isActive ? activeColor : '#E2E8F0',
+                          transition: 'background 0.3s'
+                        }} 
+                      />
+                    );
+                  })}
+                  <span style={{ 
+                    marginLeft: '8px', fontWeight: 800, fontSize: '0.7rem', 
+                    color: ({
+                      low: '#059669', medium: '#2563EB', high: '#D97706', critical: '#DC2626'
+                    })[ticket.priority] || 'var(--text-main)',
+                    textTransform: 'uppercase', letterSpacing: '0.5px'
+                  }}>
+                    {ticket.priority}
+                  </span>
                 </div>
               </div>
 
-              {/* Row: Department */}
+              {/* Row: Domain */}
               <div className="flex-between" style={{ padding: '12px 0', borderTop: '1px dashed var(--border)', borderBottom: '1px dashed var(--border)' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   <Briefcase size={14} /> Domain
@@ -745,7 +1030,7 @@ export default function TicketDetailPage() {
                    <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Lock size={12} />
                    </div>
-                   <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.875rem' }}>{ticket.department}</span>
+                   <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.875rem' }}>{ticket.category}</span>
                 </div>
               </div>
 
@@ -921,6 +1206,116 @@ export default function TicketDetailPage() {
           </motion.div>
         </div>
       )}
+      {/* MODALS FOR RESOLUTION WORKFLOW */}
+      <AnimatePresence>
+        {isResolutionModalOpen && (
+          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="modal-content" style={{ background: 'white', borderRadius: '24px', width: '100%', maxWidth: '500px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '8px', color: 'var(--text-main)' }}>Mark Ticket as Resolved</h2>
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginBottom: '24px' }}>Please provide a summary of the work done for the accountability record.</p>
+              
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-dim)', marginBottom: '8px', textTransform: 'uppercase' }}>Resolution Summary (Required)</label>
+                <textarea 
+                  className="input" 
+                  style={{ height: '120px', padding: '16px', borderRadius: '16px' }}
+                  placeholder="Explain what you actually did (e.g., Replaced cable, reconfigured switch)"
+                  value={resNotes}
+                  onChange={e => setResNotes(e.target.value)}
+                />
+              </div>
+
+              <div style={{ marginBottom: '32px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-dim)', marginBottom: '12px', textTransform: 'uppercase' }}>Resolution Type</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {[
+                    { id: 'on_site_fix', label: 'On-Site Fix' },
+                    { id: 'remote_fix', label: 'Remote Fix' },
+                    { id: 'guided_employee', label: 'Guided Employee' },
+                    { id: 'config_change', label: 'Config Change' },
+                    { id: 'other', label: 'Other' },
+                  ].map(opt => (
+                    <div 
+                      key={opt.id} 
+                      onClick={() => setResType(opt.id)}
+                      style={{ 
+                        padding: '12px', border: '1px solid ' + (resType === opt.id ? 'var(--primary)' : 'var(--border)'),
+                        borderRadius: '12px', cursor: 'pointer', textAlign: 'center', fontSize: '0.85rem', fontWeight: 700,
+                        background: resType === opt.id ? '#EFF6FF' : 'white', color: resType === opt.id ? 'var(--primary)' : 'var(--text-dim)'
+                      }}
+                    >
+                      {opt.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <Button variant="ghost" fullWidth onClick={() => setIsResolutionModalOpen(false)}>Cancel</Button>
+                <Button fullWidth onClick={handleResolveRequest} isLoading={isResolving}>Request Closure</Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isFeedbackModalOpen && (
+          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="modal-content" style={{ background: 'white', borderRadius: '24px', width: '100%', maxWidth: '450px', padding: '40px', textAlign: 'center' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🎉</div>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '8px' }}>Great! Glad it's resolved</h2>
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginBottom: '32px' }}>How was your support experience with {ticket.assignedTo?.name}?</p>
+              
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '32px' }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <Star 
+                    key={star} 
+                    size={32} 
+                    fill={rating >= star ? 'var(--warning)' : 'none'} 
+                    color={rating >= star ? 'var(--warning)' : 'var(--border)'} 
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setRating(star)}
+                  />
+                ))}
+              </div>
+
+              <textarea 
+                className="input" 
+                style={{ height: '100px', padding: '16px', borderRadius: '16px', textAlign: 'left', marginBottom: '32px' }}
+                placeholder="Optional comment about the support..."
+                value={feedbackText}
+                onChange={e => setFeedbackText(e.target.value)}
+              />
+
+              <Button fullWidth onClick={() => handleConfirmFix(true)}>Submit Feedback</Button>
+            </motion.div>
+          </div>
+        )}
+
+        {isRejectionModalOpen && (
+          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="modal-content" style={{ background: 'white', borderRadius: '24px', width: '100%', maxWidth: '450px', padding: '32px' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '8px', color: 'var(--text-main)' }}>Sorry to hear that</h2>
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginBottom: '24px' }}>What part of the issue is still not working correctly?</p>
+              
+              <div style={{ marginBottom: '32px' }}>
+                <textarea 
+                  className="input" 
+                  style={{ height: '120px', padding: '16px', borderRadius: '16px' }}
+                  placeholder="Explain what is still broken..."
+                  value={rejectionReason}
+                  onChange={e => setRejectionReason(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <Button variant="ghost" fullWidth onClick={() => setIsRejectionModalOpen(false)}>Cancel</Button>
+                <Button variant="danger" fullWidth onClick={() => handleConfirmFix(false)}>Reopen Ticket</Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </motion.div>
   );
 }

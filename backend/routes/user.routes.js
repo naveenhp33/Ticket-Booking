@@ -6,6 +6,8 @@ const { protect, authorize } = require('../middleware/auth.middleware');
 router.get('/', protect, authorize('admin'), getUsers);
 router.get('/agents', protect, authorize('admin', 'support_agent'), getAgents);
 router.get('/:id/stats', protect, getUserStats);
+router.put('/status', protect, authorize('admin'), require('../controllers/user.controller').updateLiveStatus);
+
 router.route('/:id')
   .get(protect, authorize('admin'), getUser)
   .put(protect, authorize('admin'), updateUser);

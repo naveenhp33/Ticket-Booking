@@ -9,12 +9,14 @@ import {
   ArrowDownRight,
   AlertCircle,
   Activity,
-  Star
+  Star,
+  Users,
+  Shield
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { ticketService } from '../services/ticketService';
+import { ticketService, userService } from '../services/ticketService';
 import { 
   BarChart, Bar, 
   XAxis, YAxis, 
@@ -24,6 +26,7 @@ import {
 } from 'recharts';
 import { motion } from 'framer-motion';
 import { Button, Card, Badge } from '../ui';
+import { timeAgo } from '../utils/helpers';
 import '../styles/dashboard-premium.css';
 
 const PRIORITY_COLORS = {
@@ -41,6 +44,7 @@ export default function DashboardPage() {
   const [recentTickets, setRecentTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState([]);
+  const [agents, setAgents] = useState([]);
   const { on } = useSocket();
 
   useEffect(() => {
@@ -90,11 +94,20 @@ export default function DashboardPage() {
       ));
     });
 
+    const offAgentStatus = on('agent_status_updated', (data) => {
+      setAgents(prev => prev.map(a => 
+        (a._id === data.agentId || a._id === data.agentId?.toString())
+          ? { ...a, liveStatus: data.status, lastStatusUpdate: data.timestamp, onSiteTicket: data.ticketDbId ? { ticketId: data.ticketId, _id: data.ticketDbId } : null }
+          : a
+      ));
+    });
+
     return () => {
       offTicketCreated && offTicketCreated();
       offStatusChanged && offStatusChanged();
       offAssignChanged && offAssignChanged();
       offPriorityChanged && offPriorityChanged();
+      offAgentStatus && offAgentStatus();
     };
   }, [on]);
 
@@ -154,7 +167,15 @@ export default function DashboardPage() {
       }
     };
 
+    const fetchAgents = async () => {
+      try {
+        const res = await userService.getAgents();
+        setAgents(res.data.agents);
+      } catch {}
+    };
+
     fetchDashboardData();
+    if (isAdminOrAgent) fetchAgents();
   }, [isAdminOrAgent]);
 
   const priorityData = stats?.priorityBreakdown ? Object.entries(stats.priorityBreakdown).map(([k, v]) => ({ name: k, value: v })) : [
@@ -230,10 +251,10 @@ export default function DashboardPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ textAlign: 'left', background: 'var(--surface-alt)' }}>
-                      <th style={{ padding: '16px 32px', fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Requester</th>
-                      <th style={{ padding: '16px 32px', fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Information</th>
-                      <th style={{ padding: '16px 32px', fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</th>
-                      <th style={{ padding: '16px 32px', fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Priority</th>
+                      <th style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Requester</th>
+                      <th style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Information</th>
+                      <th style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</th>
+                      <th style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Priority</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -249,7 +270,7 @@ export default function DashboardPage() {
                             transition: 'all 0.2s ease'
                           }}
                         >
-                          <td style={{ padding: '20px 32px' }}>
+                          <td>
                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--bg)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 900, border: '1px solid var(--border)' }}>
                                    {creatorName[0]}
@@ -260,13 +281,13 @@ export default function DashboardPage() {
                                 </div>
                              </div>
                           </td>
-                          <td style={{ padding: '20px 32px' }}>
+                          <td>
                              <div className="flex-col">
                                 <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.95rem' }}>{t.title}</span>
                                 <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 800, letterSpacing: '0.5px' }}>#{t.ticketId}</span>
                              </div>
                           </td>
-                          <td style={{ padding: '20px 32px' }}>
+                          <td>
                              <Badge variant={
                                t.status === 'open' ? 'info' : 
                                t.status === 'resolved' ? 'success' : 
@@ -276,7 +297,7 @@ export default function DashboardPage() {
                                {t.status?.replace('_', ' ')}
                              </Badge>
                           </td>
-                          <td style={{ padding: '20px 32px' }}>
+                          <td>
                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: PRIORITY_COLORS[t.priority.toLowerCase()], boxShadow: `0 0 10px ${PRIORITY_COLORS[t.priority.toLowerCase()]}` }} />
                                 <span style={{ fontWeight: 700, fontSize: '0.85rem', textTransform: 'capitalize' }}>{t.priority}</span>
@@ -428,6 +449,55 @@ export default function DashboardPage() {
             </div>
             <Button size="sm" variant="warning">View Requests</Button>
          </div>
+      )}
+
+      {/* Pending Confirmation Dashboard Section — The Watchtower */}
+      {user?.role === 'admin' && stats?.pendingConfirmationTickets?.length > 0 && (
+         <Card style={{ 
+           marginBottom: 'var(--s-8)', padding: 0, borderRadius: '24px', 
+           overflow: 'hidden', border: '1px solid #FEF3C7', background: '#FFFBEB',
+           boxShadow: '0 10px 15px -3px rgba(217, 119, 6, 0.05)'
+         }}>
+            <div style={{ padding: '20px 32px', borderBottom: '1px solid #FDE68A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ padding: '8px', background: 'white', borderRadius: '10px', color: '#D97706', border: '1px solid #FDE68A' }}>
+                     <Clock size={20} />
+                  </div>
+                  <div>
+                     <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: '#92400E', letterSpacing: '-0.01em' }}>PENDING CONFIRMATION ({stats.pending_confirmation})</h2>
+                     <p style={{ margin: 0, fontSize: '0.75rem', color: '#B45309', fontWeight: 600 }}>Tickets awaiting employee sign-off</p>
+                  </div>
+               </div>
+            </div>
+            <div style={{ padding: '8px' }}>
+               {stats.pendingConfirmationTickets.map(t => (
+                  <div 
+                    key={t._id} 
+                    onClick={() => navigate(`/tickets/${t._id}`)}
+                    style={{ 
+                      padding: '12px 24px', borderRadius: '16px', cursor: 'pointer', 
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.7)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#92400E', background: 'white', padding: '4px 8px', borderRadius: '6px' }}>#{t.ticketId}</span>
+                        <div>
+                           <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#451A03' }}>{t.title}</div>
+                           <div style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: 600 }}>
+                              {t.assignedTo?.name} <span style={{ opacity: 0.6 }}>→</span> {t.createdBy?.name} • Waiting {timeAgo(t.resolution?.pendingConfirmationAt)}
+                           </div>
+                        </div>
+                     </div>
+                     <Badge style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', fontSize: '0.65rem' }}>
+                        Verifying...
+                     </Badge>
+                  </div>
+               ))}
+            </div>
+         </Card>
       )}
 
       {/* Analytics & Layout Grid */}
@@ -611,20 +681,65 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="premium-card" style={{ marginBottom: 0 }}>
-            <div className="premium-card-header">
-              <h3 className="premium-card-title">Team Status</h3>
-            </div>
-            <div className="premium-activity-item">
-              <div className="activity-icon" style={{ background: 'var(--success)', color: 'white', border: '2px solid white' }}>
-                <Activity size={14} />
+          {/* Live Agent Workload Board — accountability gap bridged */}
+          {user?.role === 'admin' && (
+            <Card style={{ 
+              marginBottom: 0, borderRadius: '24px', border: '1px solid var(--border)', 
+              boxShadow: 'var(--shadow-lg)', padding: 0, overflow: 'hidden' 
+            }}>
+              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', background: 'var(--surface-alt)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Users size={20} color="var(--primary)" />
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900 }}>Live Agent Workload</h3>
+                </div>
               </div>
-              <div className="activity-content" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <p style={{ fontWeight: 600, margin: 0 }}>All systems operational</p>
-                <span>Updated just now</span>
+              <div style={{ padding: '8px' }}>
+                {agents.map(agent => (
+                  <div key={agent._id} style={{ 
+                    padding: '16px', borderRadius: '16px', borderBottom: '1px solid var(--bg)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ width: '40px', height: '40px', background: '#F1F5F9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.9rem' }}>
+                          {agent.name[0]}
+                        </div>
+                        <div style={{ 
+                          position: 'absolute', bottom: '-2px', right: '-2px', width: '12px', height: '12px', 
+                          borderRadius: '50%', border: '2px solid white',
+                          background: ({ available: '#10B981', on_site: '#3B82F6', remote: '#F59E0B', unavailable: '#EF4444' })[agent.liveStatus || 'available']
+                        }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--text-main)' }}>{agent.name}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 600 }}>
+                          {(agent.liveStatus || 'available').replace('_', ' ').toUpperCase()} 
+                          {agent.onSiteTicket && ` • #${agent.onSiteTicket.ticketId}`}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      {agent.liveStatus === 'on_site' ? (
+                        <div style={{ textAlign: 'right' }}>
+                          <Badge variant="primary" style={{ fontSize: '0.65rem' }}>Active On-Site</Badge>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                            {agent.onSiteTicket?.onSiteVisit?.arrivalConfirmedByEmployee ? '✅ Verified' : '⏳ Unverified'}
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)' }}>
+                          {agent.currentWorkload} active
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          </div>
+              <div style={{ padding: '16px', background: 'var(--bg)', textAlign: 'center' }}>
+                 <Button variant="ghost" size="sm" onClick={() => navigate('/admin/users')} style={{ fontSize: '0.75rem' }}>Manage All Personnel</Button>
+              </div>
+            </Card>
+          )}
 
         </div>
       </div>
