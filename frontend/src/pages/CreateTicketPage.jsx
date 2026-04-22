@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Send, 
@@ -26,11 +26,17 @@ const PRIORITIES = [
   { value: 'high',     label: ' High',     color: '#F59E0B', desc: 'Blocking my work — needs fixing today.' },
   { value: 'critical', label: ' Critical', color: '#EF4444', desc: 'Everything is stopped — fix this right now!' },
 ];
+const LOCATIONS = [
+  { value: 'Office',       icon: 'fa-building',     label: ' Office' },
+  { value: 'Hybrid',       icon: 'fa-shuffle',      label: 'Hybrid' },
+  { value: 'Remote',       icon: 'fa-home',         label: 'Remote' },
+];
 
 export default function CreateTicketPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  
+  const locationRef = useRef(null);
+
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -39,38 +45,59 @@ export default function CreateTicketPage() {
     category: 'IT',
     teamName: '',
     shift: '',
-    workLocation: ''
+    location: '',
+    locationOther: ''
   });
+  const [locationOpen, setLocationOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState([]);
-
   const [similarTickets, setSimilarTickets] = useState([]);
   const [isSearchingSimilar, setIsSearchingSimilar] = useState(false);
   const debouncedTitle = useDebounce(form.title, 600);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (locationRef.current && !locationRef.current.contains(e.target)) {
+        setLocationOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     if (debouncedTitle.trim().length > 4) {
       setIsSearchingSimilar(true);
       ticketService.findSimilar({ title: debouncedTitle, category: form.category })
-        .then(res => {
-          setSimilarTickets(res.data.tickets || []);
-          setIsSearchingSimilar(false);
-        })
+        .then(res => { setSimilarTickets(res.data.tickets || []); setIsSearchingSimilar(false); })
         .catch(() => setIsSearchingSimilar(false));
     } else {
       setSimilarTickets([]);
     }
   }, [debouncedTitle, form.category]);
 
+  const selectedLocation = LOCATIONS.find(l => l.value === form.location);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title || !form.description || !form.department) {
       return toast.error('Please fill in all required fields');
     }
+    if (!form.location) {
+      return toast.error('Please select a location');
+    }
+    if (form.location === 'Other' && !form.locationOther.trim()) {
+      return toast.error('Please enter your specific location');
+    }
 
     setLoading(true);
     const formData = new FormData();
-    Object.entries(form).forEach(([k, v]) => formData.append(k, v));
+    const finalLocation = form.location === 'Other' ? form.locationOther.trim() : form.location;
+    Object.entries(form).forEach(([k, v]) => {
+      if (k === 'locationOther') return;
+      formData.append(k, k === 'location' ? finalLocation : v);
+    });
     files.forEach(file => formData.append('attachments', file));
 
     try {
@@ -105,6 +132,8 @@ export default function CreateTicketPage() {
         <form onSubmit={handleSubmit} className="flex-col gap-6">
           <Card>
             <div className="flex-col" style={{ gap: 'var(--s-5)', padding: 'var(--s-2)' }}>
+
+              {/* Title */}
               <div className="flex-col gap-1">
                 <Input 
                   label="What's the problem? (Short title)" 
@@ -113,22 +142,13 @@ export default function CreateTicketPage() {
                   onChange={e => setForm({...form, title: e.target.value})}
                   required
                 />
-                
                 <AnimatePresence>
                   {similarTickets.length > 0 && (
                     <motion.div 
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      style={{ 
-                        marginTop: '8px', 
-                        padding: '12px', 
-                        background: '#FFFBEB', 
-                        border: '1px solid #FDE68A', 
-                        borderRadius: 'var(--r-md)',
-                        fontSize: '0.85rem',
-                        overflow: 'hidden'
-                      }}
+                      style={{ marginTop: '8px', padding: '12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 'var(--r-md)', fontSize: '0.85rem', overflow: 'hidden' }}
                     >
                       <div className="flex-center gap-2" style={{ color: '#D97706', fontWeight: 700, marginBottom: '12px' }}>
                         <AlertTriangle size={16} /> 
@@ -139,17 +159,7 @@ export default function CreateTicketPage() {
                           <div 
                             key={t._id} 
                             onClick={() => window.open(`/tickets/${t._id}`, '_blank')}
-                            style={{ 
-                              padding: '8px 12px', 
-                              background: '#fff', 
-                              border: '1px solid #FDE68A', 
-                              borderRadius: '6px', 
-                              cursor: 'pointer',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              transition: 'all 0.2s'
-                            }}
+                            style={{ padding: '8px 12px', background: '#fff', border: '1px solid #FDE68A', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s' }}
                             onMouseOver={e => { e.currentTarget.style.backgroundColor = '#FEF3C7'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                             onMouseOut={e => { e.currentTarget.style.backgroundColor = '#fff'; e.currentTarget.style.transform = 'translateY(0)'; }}
                           >
@@ -163,6 +173,7 @@ export default function CreateTicketPage() {
                 </AnimatePresence>
               </div>
 
+              {/* Description */}
               <div className="input-group">
                 <label className="input-label">Describe the problem in detail <span style={{ color: 'var(--danger)' }}>*</span></label>
                 <textarea 
@@ -175,23 +186,20 @@ export default function CreateTicketPage() {
                 />
               </div>
 
+              {/* Department + Team */}
               <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">Which team should handle this? <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <select 
                     className="input"
                     value={form.department}
-                    onChange={e => {
-                      const dept = e.target.value;
-                      setForm({...form, department: dept, category: dept});
-                    }}
+                    onChange={e => { const dept = e.target.value; setForm({...form, department: dept, category: dept}); }}
                     required
                   >
                     <option value="">Select a team</option>
                     {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
-
                 <div className="input-group">
                   <label className="input-label">Your Team Name</label>
                   <input
@@ -203,62 +211,136 @@ export default function CreateTicketPage() {
                 </div>
               </div>
 
-              <div className="form-grid-2">
-                <div className="input-group">
-                  <label className="input-label">Your Work Shift</label>
-                  <select
-                    className="input"
-                    value={form.shift}
-                    onChange={e => setForm({...form, shift: e.target.value})}
+              {/* Location — custom dropdown with Font Awesome icons */}
+              <div className="input-group">
+                <label className="input-label">
+                  Location <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <div ref={locationRef} style={{ position: 'relative' }}>
+                  {/* Trigger */}
+                  <div
+                    onClick={() => setLocationOpen(o => !o)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      height: '44px', padding: '0 var(--s-4)',
+                      background: 'var(--bg)',
+                      border: `1.5px solid ${form.location ? '#1F4E79' : 'var(--border)'}`,
+                      borderRadius: 'var(--r-md)', cursor: 'pointer',
+                      fontSize: '0.9375rem', userSelect: 'none',
+                      color: form.location ? 'var(--text-main)' : 'var(--text-dim)',
+                      transition: 'border-color var(--t-fast)'
+                    }}
                   >
-                    <option value="">Select your shift</option>
-                    {SHIFTS.map(s => (
-                      <option key={s.value} value={s.value}>{s.label} ({s.time})</option>
-                    ))}
-                  </select>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {selectedLocation
+                        ? <><i className={`fa-solid ${selectedLocation.icon}`} style={{ color: '#1F4E79', width: '16px', textAlign: 'center' }} />{selectedLocation.label}</>
+                        : 'Select a location'
+                      }
+                    </span>
+                    <i className={`fa-solid fa-chevron-${locationOpen ? 'up' : 'down'}`} style={{ color: 'var(--text-dim)', fontSize: '0.72rem' }} />
+                  </div>
+
+                  {/* Dropdown list */}
+                  {locationOpen && (
+                    <div style={{
+                      position: 'absolute', top: '48px', left: 0, right: 0, zIndex: 200,
+                      background: 'white', border: '1.5px solid #1F4E79',
+                      borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden'
+                    }}>
+                      {LOCATIONS.map((opt, idx) => (
+                        <div
+                          key={opt.value}
+                          onClick={() => { setForm(f => ({ ...f, location: opt.value, locationOther: '' })); setLocationOpen(false); }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '11px var(--s-4)', cursor: 'pointer',
+                            fontSize: '0.9375rem',
+                            background: form.location === opt.value ? '#EFF6FF' : 'white',
+                            color: form.location === opt.value ? '#1F4E79' : 'var(--text-main)',
+                            fontWeight: form.location === opt.value ? 600 : 400,
+                            borderBottom: idx < LOCATIONS.length - 1 ? '1px solid var(--border-light)' : 'none',
+                            transition: 'background 0.1s'
+                          }}
+                          onMouseEnter={e => { if (form.location !== opt.value) e.currentTarget.style.background = 'var(--bg)'; }}
+                          onMouseLeave={e => { if (form.location !== opt.value) e.currentTarget.style.background = 'white'; }}
+                        >
+                          <i className={`fa-solid ${opt.icon}`} style={{ width: '16px', textAlign: 'center', color: '#1F4E79' }} />
+                          {opt.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="input-group">
-                  <label className="input-label">Where are you working from?</label>
-                  <select
+                {/* Conditional text input for Hybrid */}
+                {form.location === 'Hybrid' && (
+                  <input
+                    type="text"
                     className="input"
-                    value={form.workLocation}
-                    onChange={e => setForm({...form, workLocation: e.target.value})}
-                  >
-                    <option value="">Select location</option>
-                    <option value="office">🏢 Office</option>
-                    <option value="remote">🏠 Working from Home (Remote)</option>
-                  </select>
-                </div>
+                    placeholder="e.g. Mon–Wed Office, Thu–Fri Remote"
+                    value={form.locationOther}
+                    onChange={e => setForm({ ...form, locationOther: e.target.value })}
+                    required
+                    style={{
+                      marginTop: '10px', border: '1.5px solid #1F4E79',
+                      borderRadius: 'var(--r-md)', padding: '0 var(--s-4)',
+                      height: '44px', fontSize: '0.9375rem', fontFamily: 'inherit',
+                      color: 'var(--text-main)', background: 'var(--bg)',
+                      width: '100%', outline: 'none', transition: 'all var(--t-fast)'
+                    }}
+                    onFocus={e => { e.target.style.background = 'white'; e.target.style.boxShadow = '0 0 0 4px var(--primary-light)'; }}
+                    onBlur={e => { e.target.style.background = 'var(--bg)'; e.target.style.boxShadow = 'none'; }}
+                  />
+                )}
+
+                {/* Conditional text input for Other */}
+                {form.location === 'Other' && (
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="e.g. Desk 402, Conference Room B"
+                    value={form.locationOther}
+                    onChange={e => setForm({ ...form, locationOther: e.target.value })}
+                    required
+                    style={{
+                      marginTop: '10px', border: '1.5px solid #1F4E79',
+                      borderRadius: 'var(--r-md)', padding: '0 var(--s-4)',
+                      height: '44px', fontSize: '0.9375rem', fontFamily: 'inherit',
+                      color: 'var(--text-main)', background: 'var(--bg)',
+                      width: '100%', outline: 'none', transition: 'all var(--t-fast)'
+                    }}
+                    onFocus={e => { e.target.style.background = 'white'; e.target.style.boxShadow = '0 0 0 4px var(--primary-light)'; }}
+                    onBlur={e => { e.target.style.background = 'var(--bg)'; e.target.style.boxShadow = 'none'; }}
+                  />
+                )}
               </div>
 
+              {/* Shift */}
+              <div className="input-group">
+                <label className="input-label">Your Work Shift</label>
+                <select
+                  className="input"
+                  value={form.shift}
+                  onChange={e => setForm({...form, shift: e.target.value})}
+                >
+                  <option value="">Select your shift</option>
+                  {SHIFTS.map(s => (
+                    <option key={s.value} value={s.value}>{s.label} ({s.time})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* File upload */}
               <div className="input-group">
                 <label className="input-label">Attach a screenshot or file <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>(optional)</span></label>
                 <div 
-                  style={{ 
-                    border: '2px dashed var(--border)', 
-                    borderRadius: 'var(--r-md)', 
-                    padding: 'var(--s-6)',
-                    cursor: 'pointer',
-                    background: 'var(--bg)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'border-color var(--t-fast)'
-                  }}
+                  style={{ border: '2px dashed var(--border)', borderRadius: 'var(--r-md)', padding: 'var(--s-6)', cursor: 'pointer', background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', transition: 'border-color var(--t-fast)' }}
                   onClick={() => document.getElementById('file-upload').click()}
                 >
                   <Paperclip size={22} color="var(--text-dim)" />
                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>Click to upload a file</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Screenshots, photos, PDFs (Max 5MB)</span>
-                  <input 
-                    id="file-upload" 
-                    type="file" 
-                    multiple 
-                    style={{ display: 'none' }} 
-                    onChange={e => setFiles([...files, ...Array.from(e.target.files)])}
-                  />
+                  <input id="file-upload" type="file" multiple style={{ display: 'none' }} onChange={e => setFiles([...files, ...Array.from(e.target.files)])} />
                 </div>
                 {files.length > 0 && (
                   <div className="flex-col gap-2" style={{ marginTop: 'var(--s-4)' }}>
@@ -271,6 +353,7 @@ export default function CreateTicketPage() {
                   </div>
                 )}
               </div>
+
             </div>
           </Card>
 
@@ -286,22 +369,10 @@ export default function CreateTicketPage() {
               {PRIORITIES.map(p => (
                 <label 
                   key={p.value}
-                  style={{ 
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    padding: '10px 14px', 
-                    border: `2px solid ${form.priority === p.value ? p.color : 'var(--border)'}`, 
-                    borderRadius: 'var(--r-md)', 
-                    cursor: 'pointer',
-                    background: form.priority === p.value ? `${p.color}10` : 'var(--bg)',
-                    transition: 'all var(--t-fast)'
-                  }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px 14px', border: `2px solid ${form.priority === p.value ? p.color : 'var(--border)'}`, borderRadius: 'var(--r-md)', cursor: 'pointer', background: form.priority === p.value ? `${p.color}10` : 'var(--bg)', transition: 'all var(--t-fast)' }}
                 >
                   <input 
-                    type="radio" 
-                    name="priority" 
-                    value={p.value} 
+                    type="radio" name="priority" value={p.value} 
                     checked={form.priority === p.value}
                     onChange={e => setForm({...form, priority: e.target.value})}
                     style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}

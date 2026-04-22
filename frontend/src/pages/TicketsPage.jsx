@@ -270,19 +270,17 @@ export default function TicketsPage() {
         </div>
       </div>
 
-      <div className="table-container" style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+      <div className="ent-table-wrap">
+        <table className="ent-table">
           <thead>
-            <tr style={{ background: '#F8FAFC' }}>
-              <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>
-                <div className="flex-center gap-2">Ticket ID <ArrowUpDown size={12} /></div>
-              </th>
-              <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>Subject & Reporter</th>
-              <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>Category</th>
-              <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>Priority</th>
-              <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>Status</th>
-              <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>Last Activity</th>
-              <th style={{ width: '40px', borderBottom: '1px solid var(--border)' }}></th>
+            <tr>
+              <th style={{ width: '120px' }}><div style={{ display:'flex', alignItems:'center', gap:'6px' }}>Ticket ID <ArrowUpDown size={11} /></div></th>
+              <th>Subject &amp; Reporter</th>
+              <th style={{ width: '110px' }}>Category</th>
+              <th className="col-center" style={{ width: '100px' }}>Priority</th>
+              <th className="col-center" style={{ width: '110px' }}>Status</th>
+              <th style={{ width: '110px' }}>Last Activity</th>
+              <th className="col-right" style={{ width: '50px' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -307,49 +305,43 @@ export default function TicketsPage() {
                   onClick={() => navigate(`/tickets/${t._id}`)}
                   className="dashboard-row"
                 >
-                  <td style={{ padding: '16px' }}>
-                    <div className="flex-center gap-2">
+                  <td style={{ overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                        <span className="ticket-id-tag">#{t.ticketId || t._id.slice(-6).toUpperCase()}</span>
-                       {t.emailSource && <Mail size={14} style={{ color: 'var(--primary)' }} title="From Email" />}
+                       {t.emailSource && <Mail size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} title="From Email" />}
                     </div>
                   </td>
-                  <td style={{ padding: '16px' }}>
-                    <div className="flex-col gap-1">
-                      <div style={{ fontWeight: 700, color: 'var(--text-dark)', fontSize: '0.95rem' }}>{t.title}</div>
-                      <div className="flex-center gap-2" style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                         <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'var(--border)', fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{t.createdBy?.name ? t.createdBy.name[0] : 'U'}</div>
-                         {t.createdBy?.name || 'Unknown'} • {new Date(t.createdAt).toLocaleDateString()}
+                  <td style={{ overflow: 'hidden' }}>
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text-dark)', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                         <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--border)', fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0 }}>{t.createdBy?.name ? t.createdBy.name[0] : 'U'}</div>
+                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.createdBy?.name || 'Unknown'} &bull; {new Date(t.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding: '16px' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, padding: '4px 10px', background: 'var(--surface-alt)', border: '1px solid var(--border)', borderRadius: '6px', display: 'inline-block', color: 'var(--text-main)' }}>
+                  <td style={{ overflow: 'hidden' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, padding: '3px 8px', background: 'var(--surface-alt)', border: '1px solid var(--border)', borderRadius: '6px', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
                       {t.category || t.department}
+                    </span>
+                  </td>
+                  <td className="col-center">
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '8px', background: t.priority === 'critical' ? '#FEF2F2' : t.priority === 'high' ? '#FFFBEB' : '#EFF6FF' }}>
+                       <span className={`priority-indicator priority-${t.priority}`} style={{ width: '8px', height: '8px', flexShrink: 0 }} />
+                       <span style={{ textTransform: 'capitalize', fontWeight: 700, fontSize: '0.8rem', color: t.priority === 'critical' ? '#991B1B' : t.priority === 'high' ? '#92400E' : '#1E40AF' }}>{t.priority}</span>
                     </div>
                   </td>
-                  <td style={{ padding: '16px' }}>
-                    <div className="flex-center gap-2" style={{ padding: '6px 12px', borderRadius: '8px', background: t.priority === 'critical' ? '#FEF2F2' : t.priority === 'high' ? '#FFFBEB' : '#EFF6FF', width: 'fit-content' }}>
-                       <span className={`priority-indicator priority-${t.priority}`} style={{ width: '8px', height: '8px' }} />
-                       <span style={{ textTransform: 'capitalize', fontWeight: 700, fontSize: '0.85rem', color: t.priority === 'critical' ? '#991B1B' : t.priority === 'high' ? '#92400E' : '#1E40AF' }}>{t.priority}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <Badge variant={
-                      t.status === 'open' ? 'info' : 
-                      t.status === 'resolved' ? 'success' : 
-                      t.status === 'assigned' ? 'primary' : 
-                      'warning'
-                    }>
+                  <td className="col-center">
+                    <Badge variant={t.status === 'open' ? 'info' : t.status === 'resolved' ? 'success' : t.status === 'assigned' ? 'primary' : 'warning'}>
                       {t.status.replace('_', ' ')}
                     </Badge>
                   </td>
                   <td>
-                    <div className="ticket-updated">
-                      <Clock size={12} />
-                      {new Date(t.updatedAt).toLocaleDateString()}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                      <Clock size={12} />{new Date(t.updatedAt).toLocaleDateString()}
                     </div>
                   </td>
-                  <td style={{ textAlign: 'right', paddingRight: '20px' }}>
+                  <td className="col-right">
                     <button 
                       className="row-action-btn"
                       style={{ marginLeft: 'auto' }}
@@ -400,7 +392,7 @@ export default function TicketsPage() {
         </table>
 
         {/* Pagination Footer */}
-        <div className="flex-between" style={{ padding: 'var(--s-4)', borderTop: '1px solid var(--border-light)', background: 'var(--surface-alt)' }}>
+        <div className="ent-table-footer">
           <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
             Showing page {pagination.page} of {pagination.totalPages}
           </div>

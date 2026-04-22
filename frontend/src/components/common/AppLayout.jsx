@@ -42,12 +42,12 @@ const NAV_ITEMS = {
     { path: '/profile',   label: 'Profile',    icon: User },
   ],
   admin: [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/admin/users', label: 'Users', icon: Users },
-    { path: '/reports', label: 'Reports', icon: BarChart2 },
-    { path: '/analytics', label: 'Analytics', icon: PieChart },
-    { path: '/settings', label: 'Settings', icon: Settings },
-    { path: '/profile',   label: 'Profile',    icon: User },
+    { path: '/dashboard',  label: 'Dashboard', icon: LayoutDashboard, fa: 'fa-gauge' },
+    { path: '/admin/users', label: 'Users',     icon: Users,           fa: 'fa-users' },
+    { path: '/reports',    label: 'Reports',   icon: BarChart2,       fa: 'fa-chart-bar' },
+    { path: '/analytics',  label: 'Analytics', icon: PieChart,        fa: 'fa-chart-line' },
+    { path: '/settings',   label: 'Settings',  icon: Settings,        fa: 'fa-gear' },
+    { path: '/profile',    label: 'Profile',   icon: User,            fa: 'fa-user' },
   ]
 };
 
@@ -60,6 +60,7 @@ export default function AppLayout() {
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -187,8 +188,11 @@ export default function AppLayout() {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) => `premium-nav-item ${checkActive(isActive) ? 'active' : ''}`}
+                style={({ isActive }) => checkActive(isActive) ? { background: '#1F4E79', color: 'white', borderRadius: '8px' } : {}}
               >
-                <item.icon size={20} />
+                {item.fa
+                  ? <i className={`fa-solid ${item.fa}`} style={{ fontSize: '1rem', width: '20px', textAlign: 'center' }} />
+                  : <item.icon size={20} />}
                 <span>{item.label}</span>
               </NavLink>
             );
@@ -196,9 +200,15 @@ export default function AppLayout() {
         </nav>
 
         <div style={{ padding: '24px 16px', borderTop: '1px solid var(--border)' }}>
-          <button className="premium-nav-item" onClick={logout} style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}>
-            <LogOut size={20} />
-            <span>Logout</span>
+          <button
+            className="premium-nav-item"
+            onClick={() => { setLoggingOut(true); setTimeout(logout, 800); }}
+            disabled={loggingOut}
+            style={{ width: '100%', background: 'transparent', border: 'none', color: '#d32f2f', cursor: 'pointer', opacity: loggingOut ? 0.7 : 1 }}
+          >
+            {loggingOut
+              ? <><div className="spinner" style={{ borderColor: 'rgba(211,47,47,0.3)', borderTopColor: '#d32f2f' }} /><span>Logging out...</span></>
+              : <><i className="fa-solid fa-right-from-bracket" style={{ fontSize: '1rem' }} /><span>Logout</span></>}
           </button>
         </div>
       </aside>

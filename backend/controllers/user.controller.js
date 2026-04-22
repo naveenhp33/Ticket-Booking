@@ -7,7 +7,7 @@ const { emitToRole } = require('../config/socket');
 // @access  Private (admin)
 const getUsers = async (req, res, next) => {
   try {
-    const { role, department, search, isActive = true } = req.query;
+    const { role, department, search, isActive, page = 1, limit = 20 } = req.query;
     const query = {};
     if (role) query.role = role;
     if (department) query.department = department;
@@ -17,12 +17,13 @@ const getUsers = async (req, res, next) => {
       { email: { $regex: search, $options: 'i' } }
     ];
 
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ name: 1 })
-      .lean();
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [users, total] = await Promise.all([
+      User.find(query).select('-password').sort({ name: 1 }).skip(skip).limit(parseInt(limit)).lean(),
+      User.countDocuments(query)
+    ]);
 
-    res.json({ success: true, users });
+    res.json({ success: true, users, total, page: parseInt(page), totalPages: Math.ceil(total / parseInt(limit)) });
   } catch (err) {
     next(err);
   }
@@ -180,11 +181,104 @@ const updateLiveStatus = async (req, res, next) => {
   }
 };
 
+// @desc    Bulk import users from CSV
+// @route   POST /api/users/bulk-import
+// @access  Private (admin)
+const bulkImportUsers = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'CSV file is required' });
+
+    const csv = require('csv-parser');
+    const { Readable } = require('stream');
+    const rows = [];
+
+    await new Promise((resolve, reject) => {
+      Readable.from(req.file.buffer)
+        .pipe(csv())
+        .on('data', row => rows.push(row))
+        .on('end', resolve)
+        .on('error', reject);
+    });
+
+    const valid = [];
+    const errors = [];
+    const emailRegex = /^[^\s@]+@vdartinc\.com$/i;
+
+    for (const row of rows) {
+      const email       = (row.email       || '').toLowerCase().trim();
+      const name        = (row.name        || '').trim();
+      const role        = (row.role        || 'employee').trim();
+      const employeeId  = (row.id          || row.employee_id || row.employeeId || '').trim();
+      const teamName    = (row.team        || row.teamName    || '').trim();
+      const shift       = (row.shift       || '').trim();
+      const designation = (row.designation || row.position   || '').trim();
+      const experience  = (row.experience  || '').trim();
+      const department  = (row.department  || 'Other').trim();
+
+      if (!emailRegex.test(email)) { errors.push(`Invalid email: ${email}`); continue; }
+      if (!name) { errors.push(`Missing name for ${email}`); continue; }
+
+      const doc = { email, name, role, isVerified: true, isActive: true, createdByAdmin: true };
+      if (employeeId)  doc.employeeId  = employeeId;
+      if (designation) doc.designation = designation;
+      if (department)  doc.department  = department;
+      if (teamName)    doc.teamName    = teamName;
+      if (shift)       doc.shift       = shift;
+      if (experience)  doc.experience  = experience;
+
+      valid.push(doc);
+    }
+
+    if (!valid.length) return res.status(400).json({ success: false, message: 'No valid rows found', errors });
+
+    const ops = valid.map(({ email, ...fields }) => ({
+      updateOne: {
+        filter: { email },
+        update: {
+          $setOnInsert: { email },
+          $set: fields
+        },
+        upsert: true
+      }
+    }));
+
+    const result = await User.bulkWrite(ops);
+    const imported = result.upsertedCount;
+    const updated  = result.modifiedCount;
+
+    res.json({ success: true, imported, updated, skipped: valid.length - imported - updated, errors });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Bulk delete users
+// @route   DELETE /api/users/bulk-delete
+// @access  Private (admin)
+const bulkDeleteUsers = async (req, res, next) => {
+  try {
+    const { userIds } = req.body;
+    if (!Array.isArray(userIds) || !userIds.length)
+      return res.status(400).json({ success: false, message: 'No user IDs provided' });
+
+    // Safety: prevent admin from deleting their own account
+    if (userIds.includes(req.user._id.toString()))
+      return res.status(400).json({ success: false, message: 'You cannot delete your own account' });
+
+    const result = await User.deleteMany({ _id: { $in: userIds } });
+    res.json({ success: true, deleted: result.deletedCount });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = { 
   getUsers, 
   getAgents, 
   getUser, 
   updateUser, 
   getUserStats,
-  updateLiveStatus
+  updateLiveStatus,
+  bulkImportUsers,
+  bulkDeleteUsers
 };

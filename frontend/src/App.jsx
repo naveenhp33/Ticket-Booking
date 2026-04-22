@@ -5,8 +5,6 @@ import { ToastProvider } from './context/ToastContext';
 
 import AppLayout from './components/common/AppLayout';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import TicketsPage from './pages/TicketsPage';
 import TicketDetailPage from './pages/TicketDetailPage';
@@ -15,6 +13,8 @@ import KnowledgePage from './pages/KnowledgePage';
 import KnowledgeArticlePage from './pages/KnowledgeArticlePage';
 import ProfilePage from './pages/ProfilePage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminAnalytics from './pages/AdminAnalytics';
+import AdminReports from './pages/AdminReports';
 import PlaceholderPage from './pages/PlaceholderPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -43,8 +43,6 @@ const AppRoutes = () => (
 
     {/* Public */}
     <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-    <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-    <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
 
     {/* Protected - App Layout */}
     <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -58,8 +56,8 @@ const AppRoutes = () => (
       
       {/* Admin Specific */}
       <Route path="admin/users"        element={<ProtectedRoute roles={['admin']}><AdminUsersPage /></ProtectedRoute>} />
-      <Route path="reports"            element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Reports" /></ProtectedRoute>} />
-      <Route path="analytics"          element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Analytics" /></ProtectedRoute>} />
+      <Route path="reports"            element={<ProtectedRoute roles={['admin']}><AdminReports /></ProtectedRoute>} />
+      <Route path="analytics"          element={<ProtectedRoute roles={['admin']}><AdminAnalytics /></ProtectedRoute>} />
       <Route path="settings"           element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Settings" /></ProtectedRoute>} />
     </Route>
 
