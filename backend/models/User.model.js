@@ -4,9 +4,9 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Name is required'],
     trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    maxlength: [100, 'Name cannot exceed 100 characters'],
+    default: ''
   },
   email: {
     type: String,
@@ -18,7 +18,6 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
     minlength: [8, 'Password must be at least 8 characters'],
     select: false
   },
@@ -33,6 +32,12 @@ const userSchema = new mongoose.Schema({
     default: 'Other'
   },
   isGuest: { type: Boolean, default: false },
+  isVerified: { type: Boolean, default: false },
+  createdByAdmin: { type: Boolean, default: false },
+  verificationToken: { type: String, select: false },
+  verificationTokenExpiry: { type: Date, select: false },
+  otp: { type: String, select: false },
+  otpExpiry: { type: Date, select: false },
   designation: { type: String, trim: true },
   employeeId: { type: String, unique: true, sparse: true },
   phone: { type: String, trim: true },
@@ -50,7 +55,7 @@ const userSchema = new mongoose.Schema({
   // For support agents — which categories they handle
   expertise: [{ type: String, enum: ['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 'Sales', 'Legal', 'Engineering'] }],
   currentWorkload: { type: Number, default: 0 }, // active assigned tickets
-  isActive: { type: Boolean, default: true },
+  isActive: { type: Boolean, default: false }, // inactive until admin activates
   lastLogin: { type: Date },
   notificationPreferences: {
     email: { type: Boolean, default: true },

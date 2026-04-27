@@ -16,6 +16,8 @@ import KnowledgePage from './pages/KnowledgePage';
 import KnowledgeArticlePage from './pages/KnowledgeArticlePage';
 import ProfilePage from './pages/ProfilePage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminAnalytics from './pages/AdminAnalytics';
+import AdminReports from './pages/AdminReports';
 import PlaceholderPage from './pages/PlaceholderPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -60,8 +62,8 @@ const AppRoutes = () => (
       
       {/* Admin Specific */}
       <Route path="admin/users"        element={<ProtectedRoute roles={['admin']}><AdminUsersPage /></ProtectedRoute>} />
-      <Route path="reports"            element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Reports" /></ProtectedRoute>} />
-      <Route path="analytics"          element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Analytics" /></ProtectedRoute>} />
+      <Route path="reports"            element={<ProtectedRoute roles={['admin']}><AdminReports /></ProtectedRoute>} />
+      <Route path="analytics"          element={<ProtectedRoute roles={['admin']}><AdminAnalytics /></ProtectedRoute>} />
       <Route path="settings"           element={<ProtectedRoute roles={['admin']}><PlaceholderPage title="Settings" /></ProtectedRoute>} />
     </Route>
 

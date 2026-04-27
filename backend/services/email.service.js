@@ -1,78 +1,112 @@
 const nodemailer = require('nodemailer');
-const { google } = require('googleapis');
-
-const OAuth2 = google.auth.OAuth2;
 
 let transporter = null;
 
-const getTransporter = async () => {
+const getTransporter = () => {
   if (transporter) return transporter;
 
-  const method = process.env.EMAIL_POLLING_METHOD || 'GMAIL';
-  const hasGmailToken = process.env.GMAIL_REFRESH_TOKEN && !process.env.GMAIL_REFRESH_TOKEN.includes('your_gmail');
-
-  if (method === 'GMAIL' && hasGmailToken) {
-    // Gmail OAuth2
-    const oauth2Client = new OAuth2(
-      process.env.GMAIL_CLIENT_ID,
-      process.env.GMAIL_CLIENT_SECRET,
-      process.env.GMAIL_REDIRECT_URI
-    );
-
-    oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
-
-    try {
-      const { token: accessToken } = await oauth2Client.getAccessToken();
-
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          type: 'OAuth2',
-          user: process.env.SUPPORT_EMAIL,
-          clientId: process.env.GMAIL_CLIENT_ID,
-          clientSecret: process.env.GMAIL_CLIENT_SECRET,
-          refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-          accessToken
-        }
-      });
-    } catch (err) {
-      console.error('❌ Failed to create Gmail transporter:', err.message);
-      return null;
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
     }
-  } else if (process.env.SMTP_HOST) {
-    // Standard SMTP
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER || process.env.IMAP_USER,
-        pass: process.env.SMTP_PASSWORD || process.env.IMAP_PASSWORD
-      }
-    });
-  } else if (process.env.IMAP_HOST && process.env.IMAP_USER && process.env.IMAP_PASSWORD) {
-    // Try to guess SMTP from IMAP settings if SMTP not explicitly provided
-    // Many providers use smtp.example.com if imap.example.com is used
-    const smtpHost = process.env.IMAP_HOST.replace('imap', 'smtp');
-    console.log(`📡 SMTP host not provided, trying guessed host: ${smtpHost}`);
-    
-    transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: 587,
-      secure: false, // StartTLS
-      auth: {
-        user: process.env.IMAP_USER,
-        pass: process.env.IMAP_PASSWORD
-      }
-    });
-  }
+  });
 
   return transporter;
 };
 
+const sendOtpEmail = async ({ to, otp }) => {
+  const transport = getTransporter();
+  if (!transport) throw new Error('Email transporter not available');
+  await transport.sendMail({
+    from: `"TicketDesk" <${process.env.FROM_EMAIL || process.env.SUPPORT_EMAIL}>`,
+    to,
+    subject: `${otp} is your TicketDesk login code`,
+    html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+          <div style="background: #1E40AF; color: white; padding: 24px 30px; border-radius: 8px 8px 0 0;">
+            <h2 style="margin: 0;">Your login code</h2>
+          </div>
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef; text-align: center;">
+            <p style="color: #6c757d; margin-bottom: 24px;">Use this code to sign in to TicketDesk. It expires in <strong>10 minutes</strong>.</p>
+            <div style="background: white; border: 2px dashed #1E40AF; border-radius: 12px; padding: 24px; display: inline-block; margin-bottom: 24px;">
+              <span style="font-size: 2.5rem; font-weight: 900; letter-spacing: 12px; color: #1E40AF; font-family: monospace;">${otp}</span>
+            </div>
+            <p style="font-size: 0.8rem; color: #adb5bd;">If you did not request this code, ignore this email. Do not share this code with anyone.</p>
+          </div>
+        </div>
+      `
+  });
+  console.log(`📧 OTP email sent to ${to}`);
+};
+
+const sendVerificationEmail = async ({ to, verifyUrl }) => {
+  const transport = getTransporter();
+  if (!transport) throw new Error('Email transporter not available');
+  await transport.sendMail({
+    from: `"TicketDesk" <${process.env.FROM_EMAIL || process.env.SUPPORT_EMAIL}>`,
+    to,
+    subject: 'Verify your TicketDesk email',
+    html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #1E40AF; color: white; padding: 24px 30px; border-radius: 8px 8px 0 0;">
+            <h2 style="margin: 0;">Verify your email address</h2>
+          </div>
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef;">
+            <p>Hi there,</p>
+            <p>Someone requested to register this email address on <strong>TicketDesk</strong>. Click the button below to verify your email.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${verifyUrl}" style="background: #1E40AF; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 1rem;">Verify My Email</a>
+            </div>
+            <p style="font-size: 0.85rem; color: #6c757d;">This link expires in <strong>24 hours</strong>. If you did not request this, ignore this email.</p>
+            <p style="font-size: 0.75rem; color: #adb5bd; margin-top: 20px;">Or copy this link: <a href="${verifyUrl}">${verifyUrl}</a></p>
+          </div>
+        </div>
+      `
+  });
+  console.log(`📧 Verification email sent to ${to}`);
+};
+
+const sendPasswordSetEmail = async ({ to, name, password }) => {
+  try {
+    const transport = getTransporter();
+    if (!transport) return;
+    await transport.sendMail({
+      from: `"TicketDesk" <${process.env.FROM_EMAIL || process.env.SUPPORT_EMAIL}>`,
+      to,
+      subject: 'Your TicketDesk account is ready',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #059669; color: white; padding: 24px 30px; border-radius: 8px 8px 0 0;">
+            <h2 style="margin: 0;">✅ Your account is ready!</h2>
+          </div>
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef;">
+            <p>Hi <strong>${name}</strong>,</p>
+            <p>Your TicketDesk account has been activated by the admin. Here are your login details:</p>
+            <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 20px; margin: 20px 0;">
+              <p style="margin: 0 0 8px;"><strong>Email:</strong> ${to}</p>
+              <p style="margin: 0;"><strong>Password:</strong> <code style="background: #f1f3f5; padding: 2px 8px; border-radius: 4px;">${password}</code></p>
+            </div>
+            <p style="color: #dc3545; font-weight: 600;">⚠️ Please keep this password safe. If you forget it, raise a support ticket and the admin will reset it for you.</p>
+            <div style="text-align: center; margin: 24px 0;">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login" style="background: #1E40AF; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 700;">Login Now</a>
+            </div>
+          </div>
+        </div>
+      `
+    });
+    console.log(`📧 Password set email sent to ${to}`);
+  } catch (err) {
+    console.error('❌ Password set email error:', err.message);
+  }
+};
+
 const sendTicketConfirmation = async ({ to, name, ticket }) => {
   try {
-    const transport = await getTransporter();
+    const transport = getTransporter();
     if (!transport) return;
 
     const mailOptions = {
@@ -117,7 +151,7 @@ const sendTicketConfirmation = async ({ to, name, ticket }) => {
 
 const sendStatusUpdate = async ({ to, name, ticket, newStatus }) => {
   try {
-    const transport = await getTransporter();
+    const transport = getTransporter();
     if (!transport) return;
 
     const statusColors = {
@@ -153,7 +187,7 @@ const sendStatusUpdate = async ({ to, name, ticket, newStatus }) => {
 
 const sendAckEmail = async ({ to, name, ticket }) => {
   try {
-    const transport = await getTransporter();
+    const transport = getTransporter();
     if (!transport) return;
 
     await transport.sendMail({
@@ -186,7 +220,7 @@ const sendAckEmail = async ({ to, name, ticket }) => {
 
 const sendResolveEmail = async ({ to, name, ticket }) => {
   try {
-    const transport = await getTransporter();
+    const transport = getTransporter();
     if (!transport) return;
 
     await transport.sendMail({
@@ -220,7 +254,7 @@ const sendResolveEmail = async ({ to, name, ticket }) => {
 
 const sendStatusChangeEmail = async ({ to, name, ticket, newStatus }) => {
   try {
-    const transport = await getTransporter();
+    const transport = getTransporter();
     if (!transport) return;
 
     const statusMap = {
@@ -272,4 +306,5 @@ const sendStatusChangeEmail = async ({ to, name, ticket, newStatus }) => {
   }
 };
 
-module.exports = { sendTicketConfirmation, sendStatusUpdate, sendAckEmail, sendResolveEmail, sendStatusChangeEmail };
+module.exports = { sendOtpEmail, sendVerificationEmail, sendPasswordSetEmail, sendTicketConfirmation, sendStatusUpdate, sendAckEmail, sendResolveEmail, sendStatusChangeEmail };
+

@@ -138,17 +138,16 @@ app.use(errorHandler);
 
 // Connect DB and Start Services
 connectDB().then(() => {
-  // Start email poller if configured
-  const method = process.env.EMAIL_POLLING_METHOD || 'IMAP';
-  const hasGmailConfig = process.env.GMAIL_REFRESH_TOKEN && !process.env.GMAIL_REFRESH_TOKEN.includes('your_gmail');
-  const hasImapConfig = process.env.IMAP_USER && !process.env.IMAP_USER.includes('itadmin@vdartinc.com');
-  
+  // Email poller disabled — IMAP credentials invalid (App Password revoked)
+  // Re-enable after updating IMAP_PASSWORD in .env with a fresh App Password
+  // const method = process.env.EMAIL_POLLING_METHOD || 'IMAP';
+  // const hasGmailConfig = process.env.GMAIL_REFRESH_TOKEN && !process.env.GMAIL_REFRESH_TOKEN.includes('your_gmail');
+  // const hasImapConfig = process.env.IMAP_USER && !process.env.IMAP_USER.includes('itadmin@vdartinc.com');
+  // if ((method === 'GMAIL' && hasGmailConfig) || (method === 'IMAP' && hasImapConfig) || (method === 'SMTP' && hasImapConfig)) {
+  //   startEmailPoller();
+  // }
+
   const { startResolutionCron } = require('./services/resolutionCron.service');
-  
-  if ((method === 'GMAIL' && hasGmailConfig) || (method === 'IMAP' && hasImapConfig) || (method === 'SMTP' && hasImapConfig)) {
-    startEmailPoller();
-    console.log(`📧 Email poller started (Method: ${method === 'SMTP' ? 'IMAP (via SMTP settings)' : method})`);
-  }
 
   // Start the 24h auto-close checker
   startResolutionCron();

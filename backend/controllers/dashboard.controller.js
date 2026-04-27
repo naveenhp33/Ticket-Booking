@@ -244,4 +244,62 @@ const getWorkload = async (req, res, next) => {
   }
 };
 
-module.exports = { getEmployeeDashboard, getAdminDashboard, getWorkload };
+// @desc    Analytics data
+// @route   GET /api/dashboard/analytics
+// @access  Private (admin)
+const getAnalytics = async (req, res, next) => {
+  try {
+    const [totalTickets, statusBreakdown, priorityBreakdown, categoryBreakdown, monthlyTrend] = await Promise.all([
+      Ticket.countDocuments(),
+      Ticket.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      Ticket.aggregate([{ $group: { _id: '$priority', count: { $sum: 1 } } }]),
+      Ticket.aggregate([{ $group: { _id: '$category', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      Ticket.aggregate([
+        { $match: { createdAt: { $gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ])
+    ]);
+    res.json({ success: true, totalTickets, statusBreakdown, priorityBreakdown, categoryBreakdown, monthlyTrend });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Reports data
+// @route   GET /api/dashboard/reports
+// @access  Private (admin)
+const getReports = async (req, res, next) => {
+  try {
+    const [avgResolution, topCategories, slaCompliance, agentPerformance] = await Promise.all([
+      Ticket.aggregate([
+        { $match: { status: { $in: ['resolved', 'closed'] }, 'resolution.resolvedAt': { $exists: true } } },
+        { $project: { hours: { $divide: [{ $subtract: ['$resolution.resolvedAt', '$createdAt'] }, 3600000] } } },
+        { $group: { _id: null, avg: { $avg: '$hours' } } }
+      ]),
+      Ticket.aggregate([
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 }
+      ]),
+      Ticket.aggregate([
+        { $group: { _id: null, total: { $sum: 1 }, breached: { $sum: { $cond: ['$sla.breached', 1, 0] } } } }
+      ]),
+      Ticket.aggregate([
+        { $match: { assignedTo: { $ne: null }, status: { $in: ['resolved', 'closed'] } } },
+        { $group: { _id: '$assignedTo', resolved: { $sum: 1 }, avgRating: { $avg: '$feedback.rating' } } },
+        { $sort: { resolved: -1 } },
+        { $limit: 10 },
+        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'agent' } },
+        { $unwind: '$agent' },
+        { $project: { name: '$agent.name', email: '$agent.email', resolved: 1, avgRating: 1 } }
+      ])
+    ]);
+    const slaRate = slaCompliance[0] ? ((slaCompliance[0].total - slaCompliance[0].breached) / slaCompliance[0].total * 100).toFixed(1) : 100;
+    res.json({ success: true, avgResolutionHours: avgResolution[0]?.avg?.toFixed(1) || 0, topCategories, slaComplianceRate: slaRate, agentPerformance });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getEmployeeDashboard, getAdminDashboard, getWorkload, getAnalytics, getReports };
