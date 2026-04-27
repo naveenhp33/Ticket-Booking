@@ -24,7 +24,11 @@ export const ticketService = {
   confirmArrival: (id, confirmed) => api.post(`/tickets/${id}/confirm-arrival`, { confirmed }),
   agentResolve: (id, data) => api.post(`/tickets/${id}/agent-resolve`, data),
   withdrawResolve: (id) => api.post(`/tickets/${id}/withdraw-resolve`),
-  confirmFix: (id, data) => api.post(`/tickets/${id}/confirm-fix`, data)
+  confirmFix: (id, data) => api.post(`/tickets/${id}/confirm-fix`, data),
+  requestHold: (id, data) => api.post(`/tickets/${id}/request-hold`, data),
+  approveHold: (id) => api.post(`/tickets/${id}/approve-hold`),
+  rejectHold: (id, data) => api.post(`/tickets/${id}/reject-hold`, data),
+  resumeTicket: (id) => api.post(`/tickets/${id}/resume`)
 };
 
 export const emailService = {

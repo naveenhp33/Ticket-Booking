@@ -33,10 +33,10 @@ const register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
-    // Only @vdartinc.com emails accepted (bypass in dev mode if needed)
+    // Only @ndartinc.com emails accepted (bypass in dev mode if needed)
     const domainRestricted = process.env.ENFORCE_DOMAIN === 'true' || process.env.NODE_ENV === 'production';
-    if (domainRestricted && !finalEmail.toLowerCase().endsWith('@vdartinc.com')) {
-      return res.status(400).json({ success: false, message: 'Only @vdartinc.com emails are accepted' });
+    if (domainRestricted && !finalEmail.toLowerCase().endsWith('@ndartinc.com')) {
+      return res.status(400).json({ success: false, message: 'Only @ndartinc.com emails are accepted' });
     }
 
     // Only admins can create admin/agent accounts

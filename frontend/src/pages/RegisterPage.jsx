@@ -24,7 +24,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.fullName.trim()) return toast.error('Full name is required');
-    if (!form.workEmail.includes('@') || !form.workEmail.includes('.')) return toast.error('Please enter a valid email address');
+    if (!form.workEmail.endsWith('@ndartinc.com')) return toast.error('Only @ndartinc.com email addresses are allowed');
     if (!form.employeeId.trim()) return toast.error('Employee ID is required');
     if (!form.department) return toast.error('Please select a department');
     if (!form.designation.trim()) return toast.error('Designation is required');
@@ -45,14 +45,14 @@ export default function RegisterPage() {
       {/* Left Column: Branding */}
       <div className="auth-page__brand">
         <div className="auth-page__logo-fixed">
-          <div className="flex-center" style={{ width: '32px', height: '32px', background: 'white', color: 'var(--primary)', borderRadius: 'var(--r-md)', fontWeight: 800 }}>V</div>
-          VDesk
+          <div className="flex-center" style={{ width: '32px', height: '32px', background: 'white', color: 'var(--primary)', borderRadius: 'var(--r-md)', fontWeight: 800 }}>T</div>
+          TBS
         </div>
         
         <div className="auth-page__brand-content">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="auth-page__tagline">Empowering your support<br />workflow.</h1>
-            <p className="auth-page__tagline-sub">Join thousands of VDartians who use VDesk to resolve IT hurdles efficiently and collaboratively.</p>
+            <p className="auth-page__tagline-sub">Join thousands of employees who use TBS to resolve IT hurdles efficiently and collaboratively.</p>
             
             <div className="auth-page__features-pills">
               <span className="feature-pill">Internal Knowledge Base</span>
@@ -82,7 +82,7 @@ export default function RegisterPage() {
             <div className="form-grid-2">
               <Input 
                 label="Work Email" 
-                placeholder="name@vdartinc.com" 
+                placeholder="name@ndartinc.com" 
                 value={form.workEmail} 
                 onChange={e => setForm({...form, workEmail: e.target.value})}
                 leftIcon={<Mail size={18} />}

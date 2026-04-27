@@ -649,6 +649,39 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Shift & Team Intelligence (New Section) */}
+          {user?.role === 'admin' && (
+            <div className="premium-card">
+              <div className="premium-card-header">
+                <h3 className="premium-card-title">Shift & Team Intelligence</h3>
+              </div>
+              <div className="dashboard-grid-3" style={{ gap: '16px', marginTop: '16px' }}>
+                <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                  <p style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '8px' }}>1T Team (First Touch)</p>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 900 }}>{stats?.teamBreakdown?.['1T'] || 0}</div>
+                  <p style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '4px' }}>Active incidents</p>
+                </div>
+                <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                  <p style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '8px' }}>2T Team (Support)</p>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 900 }}>{stats?.teamBreakdown?.['2T'] || 0}</div>
+                  <p style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '4px' }}>Level 2 support</p>
+                </div>
+              </div>
+              
+              <div style={{ marginTop: '24px' }}>
+                <p style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '12px' }}>Current Shift Performance</p>
+                <div className="flex-col gap-3">
+                  {['morning', 'mid', 'night'].map(shift => (
+                    <div key={shift} className="flex-between" style={{ padding: '8px 12px', background: 'var(--bg)', borderRadius: '10px' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'capitalize' }}>{shift} Shift</span>
+                      <span style={{ fontWeight: 800, color: 'var(--primary)' }}>{stats?.shiftStats?.[shift] || 0} Tickets</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="premium-card" style={{ marginBottom: 0 }}>
             <div className="premium-card-header">
               <h3 className="premium-card-title">SLA Alerts</h3>

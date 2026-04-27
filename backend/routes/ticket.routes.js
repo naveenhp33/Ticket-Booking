@@ -4,7 +4,8 @@ const {
   createTicket, getTickets, getTicket, updateStatus,
   assignTicket, reopenTicket, submitFeedback,
   suggestPriority, findSimilarTickets, updatePriority, deleteTicket, updateTicket,
-  markArrived, confirmArrival, agentResolve, confirmFix, startOnSite, withdrawResolve
+  markArrived, confirmArrival, agentResolve, confirmFix, startOnSite, withdrawResolve,
+  requestHold, approveHold, rejectHold, resumeTicket
 } = require('../controllers/ticket.controller');
 const {
   createReassignRequest, getReassignRequests, processReassignRequest
@@ -43,5 +44,11 @@ router.post('/:id/confirm-arrival', protect, confirmArrival);
 router.post('/:id/agent-resolve', protect, authorize('support_agent', 'admin'), agentResolve);
 router.post('/:id/withdraw-resolve', protect, authorize('support_agent', 'admin'), withdrawResolve);
 router.post('/:id/confirm-fix', protect, confirmFix);
+
+// Hold Request Routes
+router.post('/:id/request-hold', protect, authorize('support_agent', 'admin'), requestHold);
+router.post('/:id/approve-hold', protect, authorize('admin'), approveHold);
+router.post('/:id/reject-hold', protect, authorize('admin'), rejectHold);
+router.post('/:id/resume', protect, authorize('support_agent', 'admin'), resumeTicket);
 
 module.exports = router;

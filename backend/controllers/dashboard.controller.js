@@ -95,7 +95,8 @@ const getAdminDashboard = async (req, res, next) => {
       statusCounts, priorityCounts, slaBreached,
       topAgents, categoryBreakdown, criticalTickets,
       last7DaysTrend, slaAlerts, totalUsers, avgResolution,
-      pendingReassignRequests, pendingConfirmationTickets
+      pendingReassignRequests, pendingConfirmationTickets,
+      shiftCounts, teamCounts
     ] = await Promise.all([
       Ticket.aggregate([
         { $match: matchBase },
@@ -159,11 +160,25 @@ const getAdminDashboard = async (req, res, next) => {
         ]),
         isAgent ? Promise.resolve(0) : ReassignRequest.countDocuments({ status: 'pending' }),
         Ticket.find({ ...matchBase, status: 'pending_confirmation' })
-          .limit(10)
-          .populate('createdBy assignedTo', 'name')
-          .select('ticketId title status category createdAt assignedTo resolution')
-          .lean()
-      ]);
+        .limit(10)
+        .populate('createdBy assignedTo', 'name')
+        .select('ticketId title status category createdAt assignedTo resolution')
+        .lean(),
+      Ticket.aggregate([
+        { $match: matchBase },
+        { $group: { _id: '$shift', count: { $sum: 1 } } }
+      ]),
+      Ticket.aggregate([
+        { $match: matchBase },
+        { $group: { _id: '$team', count: { $sum: 1 } } }
+      ])
+    ]);
+
+    const shiftStats = {};
+    shiftCounts.forEach(s => { if (s._id) shiftStats[s._id] = s.count; });
+
+    const teamBreakdown = {};
+    teamCounts.forEach(t => { if (t._id) teamBreakdown[t._id] = t.count; });
   
       const statusMap = {};
       statusCounts.forEach(s => { statusMap[s._id] = s.count; });
@@ -191,7 +206,9 @@ const getAdminDashboard = async (req, res, next) => {
           slaAlerts,
           avgResolutionHours: avgResolution[0]?.avg?.toFixed(1) || 0,
           pendingReassignRequests,
-          pendingConfirmationTickets
+          pendingConfirmationTickets,
+          shiftStats,
+          teamBreakdown
         }
       });
   } catch (err) {

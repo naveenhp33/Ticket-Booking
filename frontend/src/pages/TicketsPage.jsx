@@ -16,7 +16,9 @@ import {
   CheckSquare, 
   AlertCircle,
   ExternalLink,
-  Mail
+  Mail,
+  LayoutList,
+  LayoutDashboard
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ticketService } from '../services/ticketService';
@@ -37,9 +39,13 @@ export default function TicketsPage() {
   const [filters, setFilters] = useState({
     status: searchParams.get('status') || '',
     priority: searchParams.get('priority') || '',
+    category: searchParams.get('category') || '',
     search: searchParams.get('search') || '',
+    office: searchParams.get('office') || '',
     myTickets: searchParams.get('myTickets') || ''
   });
+  
+  const [viewMode, setViewMode] = useState(localStorage.getItem('ticketViewMode') || 'list'); // 'list' or 'panel' (LI PA)
   
   const [activeMenu, setActiveMenu] = useState(null); // ticketId of open menu
   const toast = useToast();
@@ -101,7 +107,9 @@ export default function TicketsPage() {
       limit: 10,
       status: statusFilter,
       priority: filters.priority,
+      category: filters.category,
       search: filters.search,
+      office: filters.office,
       myTickets: filters.myTickets
     };
 
@@ -121,7 +129,9 @@ export default function TicketsPage() {
     setFilters({
       status: searchParams.get('status') || '',
       priority: searchParams.get('priority') || '',
+      category: searchParams.get('category') || '',
       search: searchParams.get('search') || '',
+      office: searchParams.get('office') || '',
       myTickets: searchParams.get('myTickets') || ''
     });
   }, [searchParams]);
@@ -263,15 +273,80 @@ export default function TicketsPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-           <Button variant="ghost" size="sm" style={{ fontWeight: 800, padding: '8px 16px' }} leftIcon={<Filter size={16} />}>More Filters</Button>
+           <div className="view-mode-toggle flex-center" style={{ background: 'var(--surface-alt)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+             <button 
+               onClick={() => { setViewMode('list'); localStorage.setItem('ticketViewMode', 'list'); }}
+               style={{ 
+                 padding: '6px 10px', borderRadius: '6px', border: 'none', 
+                 background: viewMode === 'list' ? 'white' : 'transparent',
+                 boxShadow: viewMode === 'list' ? 'var(--shadow-sm)' : 'none',
+                 color: viewMode === 'list' ? 'var(--primary)' : 'var(--text-dim)',
+                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.75rem'
+               }}
+             >
+               <LayoutList size={14} /> LI
+             </button>
+             <button 
+               onClick={() => { setViewMode('panel'); localStorage.setItem('ticketViewMode', 'panel'); }}
+               style={{ 
+                 padding: '6px 10px', borderRadius: '6px', border: 'none', 
+                 background: viewMode === 'panel' ? 'white' : 'transparent',
+                 boxShadow: viewMode === 'panel' ? 'var(--shadow-sm)' : 'none',
+                 color: viewMode === 'panel' ? 'var(--primary)' : 'var(--text-dim)',
+                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.75rem'
+               }}
+             >
+               <LayoutDashboard size={14} /> PA
+             </button>
+           </div>
+           
            {user?.role === 'employee' && (
              <Button variant="primary" size="sm" style={{ fontWeight: 800, padding: '8px 20px', borderRadius: '12px' }} onClick={() => navigate('/tickets/new')} leftIcon={<Plus size={18} />}>New Ticket</Button>
            )}
         </div>
       </div>
 
-      <div className="table-container" style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border)', minWidth: 'fit-content' }}>
+           <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Office</span>
+           <select 
+             style={{ border: 'none', background: 'transparent', fontWeight: 700, fontSize: '0.85rem', outline: 'none', cursor: 'pointer' }}
+             value={filters.office}
+             onChange={e => handleFilterChange('office', e.target.value)}
+           >
+             <option value="">All Offices</option>
+             <option value="GICC">GICC (VP-GICC)</option>
+             <option value="Bangalore">Bangalore (VP-Bangalore)</option>
+           </select>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border)', minWidth: 'fit-content' }}>
+           <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Category</span>
+           <select 
+             style={{ border: 'none', background: 'transparent', fontWeight: 700, fontSize: '0.85rem', outline: 'none', cursor: 'pointer' }}
+             value={filters.category}
+             onChange={e => handleFilterChange('category', e.target.value)}
+           >
+             <option value="">All Categories</option>
+             {['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 'Sales', 'Legal'].map(c => <option key={c} value={c}>{c}</option>)}
+           </select>
+         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border)', minWidth: 'fit-content' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Team</span>
+            <select 
+              style={{ border: 'none', background: 'transparent', fontWeight: 700, fontSize: '0.85rem', outline: 'none', cursor: 'pointer' }}
+              value={filters.team || ''}
+              onChange={e => handleFilterChange('team', e.target.value)}
+            >
+              <option value="">All Teams</option>
+              <option value="1T">1T (First Touch)</option>
+              <option value="2T">2T (Support)</option>
+            </select>
+         </div>
+      </div>
+
+      {viewMode === 'list' ? (
+        <div className="table-container" style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
             <tr style={{ background: '#F8FAFC' }}>
               <th style={{ padding: '16px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>
@@ -398,8 +473,60 @@ export default function TicketsPage() {
             </AnimatePresence>
           </tbody>
         </table>
+      </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+          <AnimatePresence mode="popLayout">
+            {loading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} style={{ height: '200px', background: 'var(--surface-alt)', borderRadius: '20px', animation: 'pulse 1.5s infinite' }} />
+              ))
+            ) : tickets.length === 0 ? (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', color: 'var(--text-dim)' }}>No tickets found.</div>
+            ) : tickets.map((t, idx) => (
+              <motion.div 
+                key={t._id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.03 }}
+                onClick={() => navigate(`/tickets/${t._id}`)}
+                style={{ 
+                  background: 'white', padding: '24px', borderRadius: '20px', border: '1px solid var(--border-light)', 
+                  cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: 'var(--shadow-sm)',
+                  display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative'
+                }}
+                onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; e.currentTarget.style.borderColor = 'var(--primary-light)'; }}
+                onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.borderColor = 'var(--border-light)'; }}
+              >
+                <div className="flex-between">
+                  <span style={{ fontWeight: 900, color: 'var(--primary)', fontSize: '0.75rem', background: 'var(--primary-light)', padding: '6px 12px', borderRadius: '10px' }}>#{t.ticketId || t._id.slice(-6).toUpperCase()}</span>
+                  <Badge variant={t.status === 'open' ? 'info' : t.status === 'resolved' ? 'success' : 'primary'}>
+                    {t.status.replace('_', ' ')}
+                  </Badge>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-dark)', lineHeight: 1.3, marginBottom: '8px' }}>{t.title}</div>
+                  <div className="flex-center gap-2" style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.7rem' }}>{t.createdBy?.name ? t.createdBy.name[0] : 'U'}</div>
+                    <span style={{ fontWeight: 600 }}>{t.createdBy?.name || 'Unknown'}</span>
+                    <span>•</span>
+                    <span>{new Date(t.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <div className="flex-between" style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
+                  <div className="flex-center gap-2" style={{ padding: '6px 12px', borderRadius: '10px', background: t.priority === 'critical' ? '#FEF2F2' : '#F0F9FF' }}>
+                    <span className={`priority-indicator priority-${t.priority}`} style={{ width: '8px', height: '8px' }} />
+                    <span style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'capitalize', color: t.priority === 'critical' ? '#991B1B' : '#0369A1' }}>{t.priority}</span>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t.category}</div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
 
-        {/* Pagination Footer */}
+      {/* Pagination Footer */}
         <div className="flex-between" style={{ padding: 'var(--s-4)', borderTop: '1px solid var(--border-light)', background: 'var(--surface-alt)' }}>
           <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
             Showing page {pagination.page} of {pagination.totalPages}

@@ -42,8 +42,8 @@ export default function LoginPage() {
       {/* Branding Panel */}
       <div className="auth-page__brand">
         <div className="auth-page__logo-fixed">
-          <div className="flex-center" style={{ width: '32px', height: '32px', background: 'white', color: 'var(--primary)', borderRadius: 'var(--r-md)', fontWeight: 800 }}>V</div>
-          VDesk
+          <div className="flex-center" style={{ width: '32px', height: '32px', background: 'white', color: 'var(--primary)', borderRadius: 'var(--r-md)', fontWeight: 800 }}>T</div>
+          TBS
         </div>
         
         <div className="auth-page__brand-content">
@@ -103,6 +103,15 @@ export default function LoginPage() {
 
               <div style={{ textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-dim)', marginTop: 'var(--s-4)' }}>
                 Need a new account? <Link to="/register" style={{ fontWeight: 700, color: 'var(--text-main)', borderBottom: '2px solid var(--primary-faint)' }}>Create one here</Link>
+              </div>
+
+              <div style={{ 
+                marginTop: 'var(--s-10)', padding: '16px', borderRadius: '12px', 
+                background: 'var(--surface-alt)', border: '1px solid var(--border)',
+                textAlign: 'center'
+              }}>
+                <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', margin: 0 }}>On the go?</p>
+                <Link to="/mobile-login" style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)', textDecoration: 'none' }}>Mobile App Sign In Option</Link>
               </div>
             </form>
           </Card>

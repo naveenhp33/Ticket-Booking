@@ -5,6 +5,7 @@ import { ToastProvider } from './context/ToastContext';
 
 import AppLayout from './components/common/AppLayout';
 import LoginPage from './pages/LoginPage';
+import MobileLoginPage from './pages/MobileLoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
@@ -43,6 +44,7 @@ const AppRoutes = () => (
 
     {/* Public */}
     <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+    <Route path="/mobile-login" element={<PublicRoute><MobileLoginPage /></PublicRoute>} />
     <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
     <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
 

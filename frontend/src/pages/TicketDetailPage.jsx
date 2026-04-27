@@ -65,9 +65,14 @@ export default function TicketDetailPage() {
   const [resType, setResType] = useState('on_site_fix');
   const [resNotes, setResNotes] = useState('');
   
-  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  
+  const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState('');
+  const [submittingHold, setSubmittingHold] = useState(false);
+  const [isHoldApproveModalOpen, setIsHoldApproveModalOpen] = useState(false);
+  const [holdRejectReason, setHoldRejectReason] = useState('');
 
   const timerRef = useRef(null);
 
@@ -167,12 +172,44 @@ export default function TicketDetailPage() {
       }
     });
 
+    const offHoldRequested = on('hold_requested', (data) => {
+      if (data.ticketId === ticket?.ticketId) {
+        fetchTicket();
+        toast.info(`Hold requested for ${data.ticketId} by ${data.agentName}`);
+      }
+    });
+
+    const offHoldApproved = on('hold_approved', (data) => {
+      if (data.ticketId === id || data.ticketId === ticket?._id || data.ticketId === ticket?.ticketId) {
+        fetchTicket();
+        toast.success(`Hold approved for ${data.ticketId || id}`);
+      }
+    });
+
+    const offHoldRejected = on('hold_rejected', (data) => {
+      if (data.ticketId === id || data.ticketId === ticket?._id) {
+        fetchTicket();
+        toast.warning(`Hold rejected: ${data.reason}`);
+      }
+    });
+
+    const offResumed = on('ticket_resumed', (data) => {
+       if (data.ticketId === id || data.ticketId === ticket?._id) {
+        fetchTicket();
+        toast.success('Ticket resumed from hold');
+      }
+    });
+
     return () => {
       offStatus && offStatus();
       offAssigned && offAssigned();
       offComment && offComment();
       offPriority && offPriority();
       offReopened && offReopened();
+      offHoldRequested && offHoldRequested();
+      offHoldApproved && offHoldApproved();
+      offHoldRejected && offHoldRejected();
+      offResumed && offResumed();
     };
   }, [on, id, ticket?._id]);
 
@@ -405,6 +442,53 @@ export default function TicketDetailPage() {
       toast.error(err.response?.data?.message || 'Failed to send request');
     } finally {
       setSubmittingReassign(false);
+    }
+  };
+
+  const handleRequestHold = async () => {
+    if (!holdReason.trim()) return toast.error('Please provide a reason for hold.');
+    setSubmittingHold(true);
+    try {
+      await ticketService.requestHold(id, { reason: holdReason });
+      toast.success('Hold request submitted for team approval.');
+      setIsHoldModalOpen(false);
+      setHoldReason('');
+      fetchTicket();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to request hold');
+    } finally {
+      setSubmittingHold(false);
+    }
+  };
+
+  const handleApproveHold = async () => {
+    try {
+      await ticketService.approveHold(id);
+      toast.success('Hold approved.');
+      fetchTicket();
+    } catch (err) {
+      toast.error('Failed to approve hold');
+    }
+  };
+
+  const handleRejectHold = async () => {
+    try {
+      await ticketService.rejectHold(id, { denialReason: holdRejectReason });
+      toast.success('Hold request rejected.');
+      setIsHoldApproveModalOpen(false);
+      fetchTicket();
+    } catch (err) {
+      toast.error('Failed to reject hold');
+    }
+  };
+
+  const handleResumeTicket = async () => {
+    try {
+      await ticketService.resumeTicket(id);
+      toast.success('Ticket resumed.');
+      fetchTicket();
+    } catch (err) {
+      toast.error('Failed to resume ticket');
     }
   };
 
@@ -730,6 +814,8 @@ export default function TicketDetailPage() {
                 ticket.status === 'open' ? 'info' : 
                 ticket.status === 'resolved' ? 'success' : 
                 ticket.status === 'assigned' ? 'primary' : 
+                ticket.status === 'on_hold' ? 'warning' :
+                ticket.status === 'pending_hold' ? 'warning' :
                 'warning'
               } style={{ height: '24px', display: 'flex', alignItems: 'center' }}>
                 {ticket.status.replace('_', ' ').toUpperCase()}
@@ -741,20 +827,81 @@ export default function TicketDetailPage() {
 
         <div className="flex-center gap-3">
           <Button variant="outline" size="sm" onClick={() => navigate('/tickets')} leftIcon={<History size={16} />}>History</Button>
+          {(isAssignedAgent || isAdmin) && ticket.status === 'on_hold' && (
+             <Button 
+               size="md" 
+               variant="success" 
+               onClick={handleResumeTicket}
+               style={{ borderRadius: '14px', fontWeight: 800 }}
+             >
+               Resume Ticket
+             </Button>
+          )}
           {(isAdmin || (isAgent && isAssignedAgent)) && (
-            <Button 
-              size="md"
-              leftIcon={<CheckCircle2 size={20} />} 
-              onClick={handleAgentResolve} 
-              disabled={ticket.status === 'resolved' || ticket.status === 'closed' || ticket.status === 'pending_confirmation'}
-              isLoading={isResolving}
-              style={{ padding: '0 24px', borderRadius: '14px', fontWeight: 800, fontSize: '0.95rem', boxShadow: '0 8px 20px -6px rgba(30, 64, 175, 0.4)' }}
-            >
-              Resolve Ticket
-            </Button>
+            <>
+              <Button 
+                size="md"
+                variant="ghost"
+                onClick={() => setIsHoldModalOpen(true)}
+                disabled={['resolved', 'closed', 'on_hold', 'pending_hold', 'pending_confirmation'].includes(ticket.status)}
+                style={{ fontWeight: 700 }}
+              >
+                Put On Hold
+              </Button>
+              <Button 
+                size="md"
+                leftIcon={<CheckCircle2 size={20} />} 
+                onClick={handleAgentResolve} 
+                disabled={ticket.status === 'resolved' || ticket.status === 'closed' || ticket.status === 'pending_confirmation' || ticket.status === 'on_hold'}
+                isLoading={isResolving}
+                style={{ padding: '0 24px', borderRadius: '14px', fontWeight: 800, fontSize: '0.95rem', boxShadow: '0 8px 20px -6px rgba(30, 64, 175, 0.4)' }}
+              >
+                Resolve Ticket
+              </Button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Hold Request/Status Banner */}
+      {(ticket.status === 'pending_hold' || ticket.status === 'on_hold') && (
+        <Card style={{ 
+          marginBottom: 'var(--s-8)', padding: '24px', 
+          background: ticket.status === 'pending_hold' ? '#FFFBEB' : '#F8FAFC', 
+          border: '1px solid ' + (ticket.status === 'pending_hold' ? '#FDE68A' : '#E2E8F0'),
+          borderRadius: '24px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' }}>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+               <div style={{ width: '56px', height: '56px', background: 'white', border: '2px solid ' + (ticket.status === 'pending_hold' ? '#F59E0B' : '#64748B'), borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Lock size={28} color={ticket.status === 'pending_hold' ? '#F59E0B' : '#64748B'} />
+               </div>
+               <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: ticket.status === 'pending_hold' ? '#92400E' : '#1E293B' }}>
+                    {ticket.status === 'pending_hold' ? 'Hold Approval Required' : 'Ticket is Currenty On Hold'}
+                  </h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 600 }}>
+                    Reason: {ticket.hold?.reason}
+                  </p>
+                  {ticket.status === 'on_hold' && ticket.hold?.approvedAt && (
+                    <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                      Approved on {formatDateTime(ticket.hold.approvedAt)}
+                    </p>
+                  )}
+               </div>
+            </div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {isAdmin && ticket.status === 'pending_hold' && (
+                <Button size="md" onClick={() => setIsHoldApproveModalOpen(true)}>Review Hold Request</Button>
+              )}
+              {(isAdmin || (isAgent && isAssignedAgent)) && ticket.status === 'on_hold' && (
+                <Button size="md" variant="success" onClick={handleResumeTicket}>Resume Ticket Now</Button>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* On-Site Visit Workflow Hands-on Control — The Handshake Roadmap */}
       {(isAssignedAgent || (user?._id === ticket.createdBy?._id) || isAdmin) && (
@@ -976,6 +1123,8 @@ export default function TicketDetailPage() {
                   ticket.status === 'open' ? 'info' : 
                   ticket.status === 'resolved' ? 'success' : 
                   ticket.status === 'assigned' ? 'primary' : 
+                  ticket.status === 'on_hold' ? 'warning' :
+                  ticket.status === 'pending_hold' ? 'warning' :
                   'warning'
                 }>
                   {ticket.status.replace('_', ' ').toUpperCase()}
@@ -1310,6 +1459,59 @@ export default function TicketDetailPage() {
               <div style={{ display: 'flex', gap: '12px' }}>
                 <Button variant="ghost" fullWidth onClick={() => setIsRejectionModalOpen(false)}>Cancel</Button>
                 <Button variant="danger" fullWidth onClick={() => handleConfirmFix(false)}>Reopen Ticket</Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isHoldModalOpen && (
+          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="modal-content" style={{ background: 'white', borderRadius: '24px', width: '100%', maxWidth: '450px', padding: '32px' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '8px', color: 'var(--text-main)' }}>Request to Hold Ticket</h2>
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginBottom: '24px' }}>Please provide a reason. This will need team approval.</p>
+              
+              <div style={{ marginBottom: '32px' }}>
+                <textarea 
+                  className="input" 
+                  style={{ height: '120px', padding: '16px', borderRadius: '16px' }}
+                  placeholder="e.g., Waiting for hardware delivery, User is OOO"
+                  value={holdReason}
+                  onChange={e => setHoldReason(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <Button variant="ghost" fullWidth onClick={() => setIsHoldModalOpen(false)}>Cancel</Button>
+                <Button fullWidth onClick={handleRequestHold} isLoading={submittingHold}>Submit Request</Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isHoldApproveModalOpen && (
+          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="modal-content" style={{ background: 'white', borderRadius: '24px', width: '100%', maxWidth: '450px', padding: '32px' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 900, marginBottom: '8px', color: 'var(--text-main)' }}>Review Hold Request</h2>
+              <div style={{ padding: '16px', background: '#F8FAFC', borderRadius: '12px', marginBottom: '20px', fontSize: '0.9rem' }}>
+                <strong>Requested Reason:</strong><br/>
+                {ticket.hold?.reason}
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-dim)', marginBottom: '8px', textTransform: 'uppercase' }}>Denial Reason (if rejecting)</label>
+                 <textarea 
+                  className="input" 
+                  style={{ height: '80px', padding: '12px', borderRadius: '12px' }}
+                  placeholder="Why is this hold rejected?"
+                  value={holdRejectReason}
+                  onChange={e => setHoldRejectReason(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <Button variant="ghost" fullWidth onClick={() => setIsHoldApproveModalOpen(false)}>Close</Button>
+                <Button variant="danger" fullWidth onClick={handleRejectHold}>Reject</Button>
+                <Button variant="success" fullWidth onClick={handleApproveHold}>Approve Hold</Button>
               </div>
             </motion.div>
           </div>

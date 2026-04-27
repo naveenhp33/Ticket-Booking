@@ -62,6 +62,15 @@ const ticketSchema = new mongoose.Schema({
     required: true,
     enum: ['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 'Sales', 'Legal', 'Engineering', 'Other']
   },
+  ticketType: {
+    type: String,
+    enum: ['Network', 'Software', 'Hardware', 'Request', 'Replacement']
+  },
+  source: {
+    type: String,
+    enum: ['Portal', 'Mail', 'Digital', 'Onboard Lobby'],
+    default: 'Portal'
+  },
 
   // Priority system
   priority: {
@@ -89,8 +98,21 @@ const ticketSchema = new mongoose.Schema({
   // Status
   status: {
     type: String,
-    enum: ['open', 'assigned', 'in_progress', 'almost_complete', 'pending_info', 'pending_confirmation', 'resolved', 'closed', 'reopened'],
+    enum: ['open', 'assigned', 'in_progress', 'almost_complete', 'pending_info', 'pending_confirmation', 'on_hold', 'pending_hold', 'resolved', 'closed', 'reopened'],
     default: 'open'
+  },
+
+  // Hold System
+  hold: {
+    isHoldRequested: { type: Boolean, default: false },
+    reason: String,
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    requestedAt: Date,
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: Date,
+    deniedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    deniedAt: Date,
+    denialReason: String
   },
 
   // Impact & Urgency (employee input)
@@ -109,11 +131,15 @@ const ticketSchema = new mongoose.Schema({
   teamName: { type: String, trim: true },
   shift: {
     type: String,
-    enum: ['morning', 'afternoon', 'night'],
+    enum: ['morning', 'mid', 'night'],
+  },
+  office: {
+    type: String,
+    enum: ['GICC', 'Bangalore'],
   },
   workLocation: {
     type: String,
-    enum: ['office', 'remote'],
+    enum: ['office', 'remote', 'hybrid'],
   },
 
   // Device/context fields (for IT tickets)

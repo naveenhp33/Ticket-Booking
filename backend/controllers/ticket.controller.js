@@ -21,8 +21,13 @@ const createTicket = async (req, res, next) => {
     const {
       title, description, category, impactScope, urgencyLevel,
       preferredContact, context, relatedTickets, manualPriority,
-      issueStarted, tags
+      issueStarted, tags, office, shift, ticketType, source, workLocation
     } = req.body;
+
+    // Validation for IT tickets
+    if (category === 'IT' && (!context || !context.assetId)) {
+      return res.status(400).json({ success: false, message: 'Asset ID is mandatory for IT tickets' });
+    }
 
     // Duplicate detection
     const duplicateCheck = await Ticket.findOne({
@@ -66,6 +71,11 @@ const createTicket = async (req, res, next) => {
       title: title.trim(),
       description: description.trim(),
       category,
+      ticketType,
+      source: source || 'Portal',
+      office,
+      shift,
+      workLocation,
       priority: finalPriority,
       priorityScore: scoring.finalScore,
       prioritySource,
@@ -254,7 +264,7 @@ const getTicket = async (req, res, next) => {
 const updateStatus = async (req, res, next) => {
   try {
     const { status, reason, estimatedResolutionTime, resolution } = req.body;
-    const validStatuses = ['open', 'assigned', 'in_progress', 'almost_complete', 'pending_info', 'resolved', 'closed', 'reopened'];
+    const validStatuses = ['open', 'assigned', 'in_progress', 'almost_complete', 'pending_info', 'on_hold', 'pending_hold', 'resolved', 'closed', 'reopened'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status value' });
     }
@@ -264,6 +274,16 @@ const updateStatus = async (req, res, next) => {
     // Only assigned agent or admin can change status
     if (req.user.role === 'support_agent' && ticket.assignedTo?.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Only the assigned agent can update this ticket' });
+    }
+
+    // Hold Lock: If ticket is on hold, only the admin who approved it can change status
+    if (ticket.status === 'on_hold' && ticket.hold.approvedBy?.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+       return res.status(403).json({ success: false, message: 'This ticket is on hold. Only the admin who approved the hold can change its status.' });
+    }
+    // Even for admins, if it's on hold, we should probably restrict it to the holder unless they are a super admin. 
+    // But the requirement says "only that admin".
+    if (ticket.status === 'on_hold' && ticket.hold.approvedBy?.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, message: 'Only the admin who put this ticket on hold can change its status.' });
     }
 
     const oldStatus = ticket.status;
@@ -1025,10 +1045,184 @@ const confirmFix = async (req, res, next) => {
   }
 };
 
+// @desc    Agent requests hold for a ticket
+// @route   POST /api/tickets/:id/request-hold
+// @access  Private (assigned agent)
+const requestHold = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    if (!reason) return res.status(400).json({ success: false, message: 'Reason for hold is required' });
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.assignedTo?.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Only the assigned agent can request hold' });
+    }
+
+    // Check if this admin already has a ticket on hold (if that's the rule)
+    // "Only one admin can hold a ticket at a time" -> interpreted as "An admin can only hold one ticket"
+    if (req.user.role === 'admin') {
+        const existingHold = await Ticket.findOne({ 'hold.approvedBy': req.user._id, status: 'on_hold' });
+        if (existingHold) {
+            return res.status(400).json({ success: false, message: `You already have ticket ${existingHold.ticketId} on hold. You can only hold one ticket at a time.` });
+        }
+    }
+
+    const oldStatus = ticket.status;
+    ticket.status = 'pending_hold';
+    ticket.hold = {
+      isHoldRequested: true,
+      reason,
+      requestedBy: req.user._id,
+      requestedAt: new Date()
+    };
+
+    ticket.statusHistory.push({
+      from: oldStatus,
+      to: 'pending_hold',
+      changedBy: req.user._id,
+      reason: `Hold requested: ${reason}`
+    });
+
+    await ticket.save();
+
+    // Notify admins for approval
+    emitToRole('admin', 'hold_requested', {
+      ticketId: ticket.ticketId,
+      agentName: req.user.name,
+      reason
+    });
+
+    res.json({ success: true, message: 'Hold request submitted for team approval.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Admin approves hold
+// @route   POST /api/tickets/:id/approve-hold
+// @access  Private (admin)
+const approveHold = async (req, res, next) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.status !== 'pending_hold') {
+      return res.status(400).json({ success: false, message: 'Ticket is not in pending_hold state' });
+    }
+
+    const oldStatus = ticket.status;
+    ticket.status = 'on_hold';
+    ticket.hold.approvedBy = req.user._id;
+    ticket.hold.approvedAt = new Date();
+
+    ticket.statusHistory.push({
+      from: oldStatus,
+      to: 'on_hold',
+      changedBy: req.user._id,
+      reason: 'Hold approved by team'
+    });
+
+    await ticket.save();
+
+    // Ensure we release agent status if they were on_site
+    const agent = await User.findById(ticket.assignedTo);
+    if (agent && agent.liveStatus === 'on_site') {
+        agent.liveStatus = 'available';
+        agent.onSiteTicket = null;
+        await agent.save();
+    }
+
+    emitToTicket(ticket._id.toString(), 'hold_approved', { approvedBy: req.user.name });
+    emitToRole('support_agent', 'hold_approved', { ticketId: ticket.ticketId, approvedBy: req.user.name });
+
+    res.json({ success: true, message: 'Hold request approved.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Admin rejects hold
+// @route   POST /api/tickets/:id/reject-hold
+// @access  Private (admin)
+const rejectHold = async (req, res, next) => {
+  try {
+    const { denialReason } = req.body;
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.status !== 'pending_hold') {
+      return res.status(400).json({ success: false, message: 'Ticket is not in pending_hold state' });
+    }
+
+    const oldStatus = ticket.status;
+    ticket.status = 'in_progress';
+    ticket.hold.isHoldRequested = false;
+    ticket.hold.deniedBy = req.user._id;
+    ticket.hold.deniedAt = new Date();
+    ticket.hold.denialReason = denialReason;
+
+    ticket.statusHistory.push({
+      from: oldStatus,
+      to: 'in_progress',
+      changedBy: req.user._id,
+      reason: `Hold rejected: ${denialReason || 'No reason provided'}`
+    });
+
+    await ticket.save();
+
+    emitToTicket(ticket._id.toString(), 'hold_rejected', { deniedBy: req.user.name, reason: denialReason });
+
+    res.json({ success: true, message: 'Hold request rejected. Ticket is back in progress.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Resume ticket from hold
+// @route   POST /api/tickets/:id/resume
+// @access  Private (agent/admin)
+const resumeTicket = async (req, res, next) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    if (ticket.status !== 'on_hold') {
+      return res.status(400).json({ success: false, message: 'Ticket is not on hold' });
+    }
+
+    // Only the admin who approved it can resume
+    if (ticket.hold.approvedBy?.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, message: 'Only the admin who put this ticket on hold can resume it.' });
+    }
+
+    const oldStatus = ticket.status;
+    ticket.status = 'in_progress';
+    ticket.hold.isHoldRequested = false;
+
+    ticket.statusHistory.push({
+      from: oldStatus,
+      to: 'in_progress',
+      changedBy: req.user._id,
+      reason: 'Ticket resumed from hold'
+    });
+
+    await ticket.save();
+
+    emitToTicket(ticket._id.toString(), 'ticket_resumed', { resumedBy: req.user.name });
+
+    res.json({ success: true, message: 'Ticket resumed successfully.', ticket });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createTicket, getTickets, getTicket, updateStatus,
   assignTicket, reopenTicket, submitFeedback,
   suggestPriority, findSimilarTickets, updatePriority, deleteTicket, updateTicket,
   markArrived, confirmArrival, agentResolve, confirmFix,
-  startOnSite, withdrawResolve
+  startOnSite, withdrawResolve,
+  requestHold, approveHold, rejectHold, resumeTicket
 };

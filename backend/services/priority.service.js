@@ -43,7 +43,7 @@ const ROLE_MODIFIERS = {
 const SLA_HOURS = {
   critical: 1,
   high: 4,
-  medium: 24,
+  medium: 26,
   low: 72
 };
 

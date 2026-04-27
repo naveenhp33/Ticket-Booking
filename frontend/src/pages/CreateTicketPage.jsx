@@ -16,10 +16,13 @@ import { useDebounce } from '../hooks/useDebounce';
 
 const DEPARTMENTS = ['IT', 'HR', 'Finance', 'Admin', 'Operations', 'Marketing', 'Sales', 'Legal'];
 const SHIFTS = [
-  { value: 'morning',   label: ' Morning Shift',   time: '9:00 AM – 1:00 PM' },
-  { value: 'afternoon', label: ' Afternoon Shift', time: '2:00 PM – 6:00 PM' },
-  { value: 'night',     label: ' Night Shift',     time: '6:00 PM – 6:00 AM' },
+  { value: 'morning', label: 'Morning Shift' },
+  { value: 'mid',     label: 'Mid Shift' },
+  { value: 'night',   label: 'Night Shift' },
 ];
+const OFFICES = ['GICC', 'Bangalore'];
+const TICKET_TYPES = ['Network', 'Software', 'Hardware', 'Request', 'Replacement'];
+const SOURCES = ['Portal', 'Mail', 'Digital', 'Onboard Lobby'];
 const PRIORITIES = [
   { value: 'low',      label: ' Low',      color: '#10B981', desc: 'Not urgent — can wait a few days.' },
   { value: 'medium',   label: ' Medium',   color: '#4F46E5', desc: 'Needs attention but not blocking work.' },
@@ -39,7 +42,11 @@ export default function CreateTicketPage() {
     category: 'IT',
     teamName: '',
     shift: '',
-    workLocation: ''
+    office: '',
+    ticketType: '',
+    source: 'Portal',
+    workLocation: '',
+    assetId: ''
   });
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState([]);
@@ -68,9 +75,22 @@ export default function CreateTicketPage() {
       return toast.error('Please fill in all required fields');
     }
 
+    if (form.department === 'IT' && !form.assetId) {
+      return toast.error('Asset ID is mandatory for IT tickets');
+    }
+
     setLoading(true);
     const formData = new FormData();
-    Object.entries(form).forEach(([k, v]) => formData.append(k, v));
+    
+    // Process form data
+    Object.entries(form).forEach(([k, v]) => {
+        if (k !== 'assetId') {
+            formData.append(k, v);
+        }
+    });
+    // Append assetId in context for backend
+    formData.append('context[assetId]', form.assetId);
+
     files.forEach(file => formData.append('attachments', file));
 
     try {
@@ -78,7 +98,7 @@ export default function CreateTicketPage() {
       toast.success('Ticket submitted successfully');
       navigate('/tickets');
     } catch (err) {
-      toast.error('Failed to create ticket');
+      toast.error(err.response?.data?.message || 'Failed to create ticket');
     } finally {
       setLoading(false);
     }
@@ -193,6 +213,86 @@ export default function CreateTicketPage() {
                 </div>
 
                 <div className="input-group">
+                  <label className="input-label">Ticket Type</label>
+                  <select 
+                    className="input"
+                    value={form.ticketType}
+                    onChange={e => setForm({...form, ticketType: e.target.value})}
+                  >
+                    <option value="">Select type</option>
+                    {TICKET_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-grid-2">
+                {form.department === 'IT' && (
+                  <div className="input-group">
+                    <label className="input-label">Asset ID <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      className="input"
+                      placeholder="e.g. LAP-12345, DT-67890"
+                      value={form.assetId}
+                      onChange={e => setForm({...form, assetId: e.target.value})}
+                      required
+                    />
+                  </div>
+                )}
+                
+                <div className="input-group">
+                  <label className="input-label">Source</label>
+                  <select 
+                    className="input"
+                    value={form.source}
+                    onChange={e => setForm({...form, source: e.target.value})}
+                  >
+                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-grid-2">
+                <div className="input-group">
+                  <label className="input-label">Office</label>
+                  <select
+                    className="input"
+                    value={form.office}
+                    onChange={e => setForm({...form, office: e.target.value})}
+                  >
+                    <option value="">Select office</option>
+                    {OFFICES.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Work Mode</label>
+                  <select
+                    className="input"
+                    value={form.workLocation}
+                    onChange={e => setForm({...form, workLocation: e.target.value})}
+                  >
+                    <option value="">Select mode</option>
+                    <option value="office">🏢 Office</option>
+                    <option value="remote">🏠 Remote</option>
+                    <option value="hybrid">🔄 Hybrid</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-grid-2">
+                <div className="input-group">
+                  <label className="input-label">Shift</label>
+                  <select
+                    className="input"
+                    value={form.shift}
+                    onChange={e => setForm({...form, shift: e.target.value})}
+                  >
+                    <option value="">Select shift</option>
+                    {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+
+                <div className="input-group">
                   <label className="input-label">Your Team Name</label>
                   <input
                     className="input"
@@ -200,35 +300,6 @@ export default function CreateTicketPage() {
                     value={form.teamName}
                     onChange={e => setForm({...form, teamName: e.target.value})}
                   />
-                </div>
-              </div>
-
-              <div className="form-grid-2">
-                <div className="input-group">
-                  <label className="input-label">Your Work Shift</label>
-                  <select
-                    className="input"
-                    value={form.shift}
-                    onChange={e => setForm({...form, shift: e.target.value})}
-                  >
-                    <option value="">Select your shift</option>
-                    {SHIFTS.map(s => (
-                      <option key={s.value} value={s.value}>{s.label} ({s.time})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">Where are you working from?</label>
-                  <select
-                    className="input"
-                    value={form.workLocation}
-                    onChange={e => setForm({...form, workLocation: e.target.value})}
-                  >
-                    <option value="">Select location</option>
-                    <option value="office">🏢 Office</option>
-                    <option value="remote">🏠 Working from Home (Remote)</option>
-                  </select>
                 </div>
               </div>
 
